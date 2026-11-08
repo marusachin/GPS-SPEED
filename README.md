@@ -5,8 +5,8 @@ GPS speed in km/h, GPS status and accuracy, live location and route, trip record
 ## Build and install
 
 1. In GitHub, open **Actions → Build GPS Speedometer APK** and wait for the latest run to show a green check.
-2. Open that run and download artifact **GPS-Speedometer-v2.4**.
-3. Extract the downloaded ZIP, tap `GPS-Speedometer-v2.4.apk`, allow installation when Android prompts, and tap **Install**.
+2. Open that run and download artifact **GPS-Speedometer-v2.5**.
+3. Extract the downloaded ZIP, tap `GPS-Speedometer-v2.5.apk`, allow installation when Android prompts, and tap **Install**.
 
 This is a personally installable debug APK, not a Play Store release.
 
@@ -37,3 +37,8 @@ The app starts in **High accuracy** mode. Tap the location mode line under the G
 ## GPS stability
 
 The app filters low-accuracy fixes and small position jitter before updating the map route or adding trip distance. Speed readings are smoothed; large location jumps are ignored. Poor fixes are shown as weak GPS status and are not added to recorded trips. This improves stability but may delay or skip points when GPS accuracy is poor, such as indoors or between tall buildings.
+
+
+## Compass arrow
+
+The direction arrow uses the phone's rotation-vector compass while stationary and GPS course while moving. Compass accuracy depends on the phone sensors and may need calibration away from magnetic interference.
