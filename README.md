@@ -1,19 +1,18 @@
 # GPS Speedometer & Trip Tracker
 
-This Android app shows GPS speed in km/h, current GPS accuracy/status, your live location and route on an OpenStreetMap map, and lets you pause/resume and save trip summaries (distance and maximum speed) in local trip history.
+GPS speed in km/h, GPS status and accuracy, live location and route, trip recording/history, satellite details, and trip route/altitude profiles.
 
-## Build the APK on GitHub (no Android Studio required)
+## Build and install
 
-1. Sign in to GitHub and create a **Public** repository named `gps-speedometer`.
-2. On the repository page, choose **Add file → Upload files**.
-3. Upload the contents of this project folder, keeping the `.github/workflows/build-apk.yml` path. Commit the upload to the `main` branch.
-4. Open the repository's **Actions** tab. Wait for **Build GPS Speedometer APK** to finish with a green check.
-5. Open that completed run, scroll to **Artifacts**, and download `GPS-Speedometer-v1.5`.
-6. Extract the downloaded ZIP and open `GPS-Speedometer-v1.5.apk`. If Android asks, allow your browser or Files app to install unknown apps, then tap Install.
+1. In GitHub, open **Actions → Build GPS Speedometer APK** and wait for the latest run to show a green check.
+2. Open that run and download artifact **GPS-Speedometer-v1.6**.
+3. Extract the downloaded ZIP, tap `GPS-Speedometer-v1.6.apk`, allow installation when Android prompts, and tap **Install**.
 
-The debug APK is signed with Android's standard debug key and is installable. It is intended for personal use and is not a Play Store release.
+This is a personally installable debug APK, not a Play Store release.
 
-## Permissions and map
+## Full-screen map and elevation
 
-Grant location permission and turn on Location/GPS. A network connection is needed to load map tiles and the Leaflet map library. GPS collection runs while the app is open. The live map arrow follows a smoothed direction of travel and holds its last reliable direction while stationary. On Android 14 and later, altitude is converted to mean sea level when the system's geoid data is available. Earlier Android versions show GPS altitude above the WGS84 ellipsoid, with vertical accuracy when provided by the device. Open **Satellites** for visible satellites, satellites used in the fix, constellation, signal strength, elevation, and azimuth. Trip summaries and route/altitude samples are stored on the device. Open **History** and select a trip to see its route, duration, average speed, maximum speed, and altitude profile. Trips saved by older versions did not store route or altitude samples, so those older details cannot be recovered.
+Tap **⛶** on the map to expand it. Altitude appears at upper left, direction in degrees at upper right, and current/max speed at lower left. Tap the altitude unit button to switch between meters and feet. Tap a map location to request its terrain elevation; the coordinates of that tapped point are sent to Open-Meteo’s Elevation API. Terrain height comes from the Copernicus DEM at approximately 90 m resolution, so it is an estimate rather than a survey measurement. The map popup credits Open-Meteo and Copernicus DEM.
+
+The map tiles and Leaflet library require internet access. GPS speed and route recording require location permission and Location/GPS enabled. The live map arrow uses the last reliable direction when movement is too slow for a stable heading. Android 14 and later can show mean-sea-level altitude when geoid data is available; older versions show GPS altitude above the WGS84 ellipsoid.
 
