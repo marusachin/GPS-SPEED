@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
@@ -41,6 +42,8 @@ public class MainActivity extends Activity implements LocationListener {
     private float maxKmh = 0;
     private long startedAt = 0;
     private double distanceMeters = 0;
+    private long activeMillis = 0, activeSegmentStartedAt = 0;
+    private Location previousTripPoint = null;
     private int satellitesInFix = 0;
     private final GnssStatus.Callback gnssCallback = new GnssStatus.Callback() {
         @Override public void onSatelliteStatusChanged(GnssStatus status) {
@@ -55,6 +58,7 @@ public class MainActivity extends Activity implements LocationListener {
         getWindow().setStatusBarColor(Color.rgb(10, 18, 32));
         getWindow().setNavigationBarColor(Color.rgb(10, 18, 32));
         locationManager = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
+        migrateOldHistory();
         buildUi();
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_LOCATION);
@@ -89,29 +93,33 @@ public class MainActivity extends Activity implements LocationListener {
         float kmh=loc.hasSpeed()?loc.getSpeed()*3.6f:0; speedView.setText(String.format(Locale.getDefault(),"%.0f",kmh));
         boolean gps=locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
         detailView.setText((gps?"GPS fix":"GPS off")+" • Accuracy ±"+String.format(Locale.getDefault(),"%.0f",loc.getAccuracy())+" m");
-        if(recording && !paused){ if(!points.isEmpty())distanceMeters+=points.get(points.size()-1).distanceTo(loc); points.add(loc); maxKmh=Math.max(maxKmh,kmh); }
+        if(recording && !paused){ if(previousTripPoint!=null)distanceMeters+=previousTripPoint.distanceTo(loc); previousTripPoint=new Location(loc); if(points.size()<6000)points.add(new Location(loc)); maxKmh=Math.max(maxKmh,kmh); }
         updateTrip(); if(mapReady){String js="javascript:setPoint("+loc.getLatitude()+","+loc.getLongitude()+","+loc.getAccuracy()+")"; map.evaluateJavascript(js,null);}
     }
     private void toggleTrip(){
-        if(!recording){recording=true;paused=false;startedAt=System.currentTimeMillis();distanceMeters=0;maxKmh=0;points.clear();recordButton.setText("PAUSE TRIP");if(mapReady)map.evaluateJavascript("javascript:clearRoute()",null);}
-        else if(!paused){paused=true;recordButton.setText("RESUME TRIP");}
-        else {paused=false;recordButton.setText("PAUSE TRIP");}
+        if(!recording){recording=true;paused=false;startedAt=System.currentTimeMillis();activeSegmentStartedAt=startedAt;activeMillis=0;distanceMeters=0;maxKmh=0;points.clear();previousTripPoint=null;recordButton.setText("PAUSE TRIP");if(mapReady)map.evaluateJavascript("javascript:clearRoute()",null);}
+        else if(!paused){activeMillis+=System.currentTimeMillis()-activeSegmentStartedAt;paused=true;previousTripPoint=null;recordButton.setText("RESUME TRIP");}
+        else {paused=false;activeSegmentStartedAt=System.currentTimeMillis();previousTripPoint=null;recordButton.setText("PAUSE TRIP");}
         if(!recording)recordButton.setText("START TRIP"); updateTrip();
     }
     private void updateTrip(){tripView.setText(String.format(Locale.getDefault(),"Trip: %.2f km   •   Max: %.0f km/h%s",distanceMeters/1000,maxKmh,paused?"   •   PAUSED":""));}
     private void confirmStop(){if(!recording)return;new AlertDialog.Builder(this).setTitle("Stop and save trip?").setMessage("Save this trip in your history?").setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->saveTrip()).show();}
-    private void showHistory(){
-        String raw=getPreferences(0).getString("history","[]"); JSONArray arr;
-        try{arr=new JSONArray(raw);}catch(Exception e){arr=new JSONArray();}
-        StringBuilder s=new StringBuilder(); for(int i=arr.length()-1;i>=0;i--){JSONObject o=arr.optJSONObject(i);if(o!=null)s.append(o.optString("date")).append("\nDistance: ").append(o.optString("distance")).append(" km • Max: ").append(o.optString("max")).append(" km/h\n\n");}
-        if(s.length()==0)s.append("No saved trips yet. Start a trip and tap STOP TRIP to save it.");
-        new AlertDialog.Builder(this).setTitle("Trip history").setMessage(s.toString()).setPositiveButton("Close",null).show();
-    }
+    private void showHistory(){startActivity(new Intent(this,TripHistoryActivity.class));}
+    private void migrateOldHistory(){try{if(getSharedPreferences("gps_trips",0).contains("history"))return;String legacy=getPreferences(0).getString("history",null);if(legacy!=null)getSharedPreferences("gps_trips",0).edit().putString("history",legacy).apply();}catch(Exception ignored){}}
     @Override public void onProviderEnabled(String p){detailView.setText("GPS active • Waiting for location…");}
     @Override public void onProviderDisabled(String p){detailView.setText("GPS is off • Turn on Location in settings.");}
     @Override public void onStatusChanged(String p,int s,Bundle b){}
     @Override protected void onDestroy(){super.onDestroy();try{locationManager.removeUpdates(this);if(Build.VERSION.SDK_INT>=24)locationManager.unregisterGnssStatusCallback(gnssCallback);}catch(Exception ignored){}}
     @Override public void onBackPressed(){ if(recording){new AlertDialog.Builder(this).setTitle("Stop trip?").setMessage("Save this trip before closing?").setNegativeButton("Keep recording",(d,w)->{}).setPositiveButton("Stop and save",(d,w)->saveTrip()).show();}else super.onBackPressed(); }
-    private void saveTrip(){try{JSONArray a=new JSONArray(getPreferences(0).getString("history","[]"));JSONObject o=new JSONObject();o.put("date",new SimpleDateFormat("MMM d, yyyy HH:mm",Locale.getDefault()).format(new Date()));o.put("distance",String.format(Locale.US,"%.2f",distanceMeters/1000));o.put("max",String.format(Locale.US,"%.0f",maxKmh));a.put(o);getPreferences(0).edit().putString("history",a.toString()).apply();}catch(Exception ignored){} recording=false;paused=false;recordButton.setText("START TRIP");updateTrip(); }
+    private void saveTrip(){
+        try{
+            long ended=System.currentTimeMillis(); long duration=activeMillis+(paused?0:ended-activeSegmentStartedAt);
+            JSONArray route=new JSONArray(); for(Location point:points){JSONObject p=new JSONObject();p.put("lat",point.getLatitude());p.put("lon",point.getLongitude());p.put("alt",point.hasAltitude()?point.getAltitude():JSONObject.NULL);p.put("time",point.getTime());route.put(p);}
+            JSONObject trip=new JSONObject();trip.put("date",new SimpleDateFormat("MMM d, yyyy HH:mm",Locale.getDefault()).format(new Date(startedAt)));trip.put("startTime",startedAt);trip.put("endTime",ended);trip.put("durationMillis",duration);trip.put("distanceMeters",distanceMeters);trip.put("averageKmh",duration>0?(distanceMeters/(duration/1000.0))*3.6:0);trip.put("maxKmh",maxKmh);trip.put("points",route);
+            JSONArray old=new JSONArray(getSharedPreferences("gps_trips",0).getString("history","[]"));JSONArray saved=new JSONArray();for(int i=Math.max(0,old.length()-29);i<old.length();i++)saved.put(old.get(i));saved.put(trip);getSharedPreferences("gps_trips",0).edit().putString("history",saved.toString()).apply();
+        }catch(Exception ignored){}
+        recording=false;paused=false;activeMillis=0;previousTripPoint=null;recordButton.setText("START");updateTrip();
+    }
     @JavascriptInterface public void stopTrip(){runOnUiThread(()->{if(recording){new AlertDialog.Builder(this).setTitle("Stop and save trip?").setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->saveTrip()).show();}});}
 }
+

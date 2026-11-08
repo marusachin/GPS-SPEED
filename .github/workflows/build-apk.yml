@@ -5,6 +5,7 @@ on:
     branches: [ main ]
 permissions:
   contents: read
+  actions: read
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,10 +19,13 @@ jobs:
         with:
           gradle-version: '8.9'
       - uses: android-actions/setup-android@v4
-      - name: Build APK
+      - name: Build installable debug APK
         run: gradle --no-daemon assembleDebug
+      - name: Give APK a clear name
+        run: cp app/build/outputs/apk/debug/app-debug.apk GPS-Speedometer-v1.2.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: GPS-Speedometer-debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: GPS-Speedometer-v1.2
+          path: GPS-Speedometer-v1.2.apk
           if-no-files-found: error
+
