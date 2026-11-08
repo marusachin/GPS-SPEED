@@ -95,7 +95,7 @@ public class MainActivity extends Activity implements LocationListener {
         TextView units = new TextView(this); units.setText("km/h"); units.setTextColor(Color.rgb(90,190,255)); units.setTextSize(16); units.setGravity(Gravity.CENTER); dashboardAdd(units,new LinearLayout.LayoutParams(-1,dp(25)));
         altitudeView = new TextView(this); altitudeView.setText("GPS altitude — m"); altitudeView.setTextColor(Color.WHITE); altitudeView.setTextSize(12); altitudeView.setGravity(Gravity.CENTER); altitudeView.setPadding(0,dp(2),0,dp(2)); dashboardAdd(altitudeView,new LinearLayout.LayoutParams(-1,dp(24)));
         detailView = new TextView(this); detailView.setText("Waiting for GPS • Accuracy —"); detailView.setTextColor(Color.LTGRAY); detailView.setTextSize(13); detailView.setGravity(Gravity.CENTER); detailView.setPadding(8,dp(2),8,dp(8)); dashboardAdd(detailView);
-        map = new WebView(this); map.setBackgroundColor(Color.rgb(30,42,55)); map.getSettings().setJavaScriptEnabled(true); map.setWebChromeClient(new WebChromeClient()); map.setWebViewClient(new WebViewClient(){@Override public void onPageFinished(WebView v,String u){mapReady=true;}}); map.addJavascriptInterface(this,"Android"); map.loadUrl("file:///android_asset/map.html");
+        map = new WebView(this); map.setBackgroundColor(Color.rgb(30,42,55)); map.getSettings().setJavaScriptEnabled(true); map.getSettings().setUserAgentString(map.getSettings().getUserAgentString()+" GPS-Speedometer/2.0"); map.setWebChromeClient(new WebChromeClient()); map.setWebViewClient(new WebViewClient(){@Override public void onPageFinished(WebView v,String u){mapReady=true;}}); map.addJavascriptInterface(this,"Android"); map.loadUrl("file:///android_asset/map.html");
         root.addView(map,new LinearLayout.LayoutParams(-1,0,1));
         bottomControls = new LinearLayout(this); bottomControls.setOrientation(LinearLayout.VERTICAL);root.addView(bottomControls,new LinearLayout.LayoutParams(-1,-2));
         tripView = new TextView(this); tripView.setText("Trip: 0.00 km   •   Max: 0 km/h"); tripView.setTextColor(Color.WHITE); tripView.setTextSize(15); tripView.setGravity(Gravity.CENTER); tripView.setPadding(4,dp(8),4,dp(8)); bottomControls.addView(tripView,new LinearLayout.LayoutParams(-1,dp(42)));
@@ -141,7 +141,7 @@ public class MainActivity extends Activity implements LocationListener {
         latestAltitudeMeters=meters;latestAltitudeKnown=true;latestAltitudeMsl=msl;
         altitudeView.setText(String.format(Locale.getDefault(),msl?"Altitude %.0f m MSL%s":"GPS altitude %.0f m WGS84%s",meters,accuracy));updateMapInfo();
     }
-    private void updateMapInfo(){if(mapReady)map.evaluateJavascript("javascript:setMapInfo("+latestSpeedKmh+","+Math.max(maxKmh,sessionMaxKmh)+","+latestAltitudeMeters+","+latestAltitudeKnown+","+latestAltitudeMsl+","+(Double.isFinite(latestDirectionDegrees)?latestDirectionDegrees:-1)+")",null);}
+    private void updateMapInfo(){if(mapReady)map.evaluateJavascript("javascript:setMapInfo("+latestSpeedKmh+","+(recording?maxKmh:sessionMaxKmh)+","+latestAltitudeMeters+","+latestAltitudeKnown+","+latestAltitudeMsl+","+(Double.isFinite(latestDirectionDegrees)?latestDirectionDegrees:-1)+")",null);}
     @JavascriptInterface public void toggleFullscreen(){runOnUiThread(()->{fullScreenMap=!fullScreenMap;dashboard.setVisibility(fullScreenMap?View.GONE:View.VISIBLE);bottomControls.setVisibility(fullScreenMap?View.GONE:View.VISIBLE);if(mapReady)map.evaluateJavascript("javascript:setFullscreen("+fullScreenMap+")",null);});}
     @JavascriptInterface public void onDirectionChanged(double degrees){latestDirectionDegrees=degrees;}
     @JavascriptInterface public void onMapPointSelected(double lat,double lon){
@@ -156,9 +156,9 @@ public class MainActivity extends Activity implements LocationListener {
     }
     private void convertRecordedPointsToMsl(){for(int i=0;i<points.size();i++){Location point=points.get(i);if(!point.hasMslAltitude()){Location converted=new Location(point);if(Api34Altitude.tryConvert(converted))points.set(i,converted);}}}
     private void toggleTrip(){
-        if(!recording){recording=true;paused=false;startedAt=System.currentTimeMillis();activeSegmentStartedAt=startedAt;activeMillis=0;distanceMeters=0;maxKmh=0;points.clear();previousTripPoint=null;recordButton.setText("PAUSE TRIP");if(mapReady)map.evaluateJavascript("javascript:clearRoute()",null);}
+        if(!recording){recording=true;paused=false;startedAt=System.currentTimeMillis();activeSegmentStartedAt=startedAt;activeMillis=0;distanceMeters=0;maxKmh=0;points.clear();previousTripPoint=null;recordButton.setText("PAUSE TRIP");if(mapReady)map.evaluateJavascript("javascript:clearRoute();resumeGpsFollow()",null);}
         else if(!paused){activeMillis+=System.currentTimeMillis()-activeSegmentStartedAt;paused=true;previousTripPoint=null;recordButton.setText("RESUME TRIP");}
-        else {paused=false;activeSegmentStartedAt=System.currentTimeMillis();previousTripPoint=null;recordButton.setText("PAUSE TRIP");}
+        else {paused=false;activeSegmentStartedAt=System.currentTimeMillis();previousTripPoint=null;recordButton.setText("PAUSE TRIP");if(mapReady)map.evaluateJavascript("javascript:resumeGpsFollow()",null);}
         if(!recording)recordButton.setText("START TRIP"); updateTrip();
     }
     private void updateTrip(){tripView.setText(String.format(Locale.getDefault(),"Trip: %.2f km   •   Max: %.0f km/h%s",distanceMeters/1000,maxKmh,paused?"   •   PAUSED":""));}
@@ -172,7 +172,7 @@ public class MainActivity extends Activity implements LocationListener {
     private void saveTrip(){
         try{
             long ended=System.currentTimeMillis(); long duration=activeMillis+(paused?0:ended-activeSegmentStartedAt);
-            JSONArray route=new JSONArray(); for(Location point:points){JSONObject p=new JSONObject();p.put("lat",point.getLatitude());p.put("lon",point.getLongitude());double alt=Build.VERSION.SDK_INT>=34&&point.hasMslAltitude()?point.getMslAltitudeMeters():point.hasAltitude()?point.getAltitude():Double.NaN;p.put("alt",Double.isFinite(alt)?alt:JSONObject.NULL);p.put("time",point.getTime());route.put(p);}
+            JSONArray route=new JSONArray(); for(Location point:points){JSONObject p=new JSONObject();p.put("lat",point.getLatitude());p.put("lon",point.getLongitude());double alt=Build.VERSION.SDK_INT>=34&&point.hasMslAltitude()?point.getMslAltitudeMeters():point.hasAltitude()?point.getAltitude():Double.NaN;p.put("alt",Double.isFinite(alt)?alt:JSONObject.NULL);p.put("speedKmh",point.hasSpeed()?point.getSpeed()*3.6:JSONObject.NULL);p.put("bearingDeg",point.hasBearing()?point.getBearing():JSONObject.NULL);p.put("time",point.getTime());route.put(p);}
             JSONObject trip=new JSONObject();trip.put("date",new SimpleDateFormat("MMM d, yyyy HH:mm",Locale.getDefault()).format(new Date(startedAt)));trip.put("startTime",startedAt);trip.put("endTime",ended);trip.put("durationMillis",duration);trip.put("distanceMeters",distanceMeters);trip.put("averageKmh",duration>0?(distanceMeters/(duration/1000.0))*3.6:0);trip.put("maxKmh",maxKmh);trip.put("altitudeReference",Build.VERSION.SDK_INT>=34&&altitudeMslReady?"MSL":"WGS84");trip.put("points",route);
             JSONArray old=new JSONArray(getSharedPreferences("gps_trips",0).getString("history","[]"));JSONArray saved=new JSONArray();for(int i=Math.max(0,old.length()-29);i<old.length();i++)saved.put(old.get(i));saved.put(trip);getSharedPreferences("gps_trips",0).edit().putString("history",saved.toString()).apply();
         }catch(Exception ignored){}

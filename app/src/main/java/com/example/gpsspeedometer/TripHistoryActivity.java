@@ -43,7 +43,7 @@ public class TripHistoryActivity extends Activity {
         LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(8),dp(2),dp(8),dp(2));
         Button back=new Button(this);back.setText("‹  HISTORY");back.setTextSize(13);back.setOnClickListener(v->showList());bar.addView(back,new LinearLayout.LayoutParams(dp(118),dp(48)));
         TextView title=new TextView(this);title.setText(trip.optString("date","Trip details"));title.setTextColor(Color.WHITE);title.setTextSize(14);title.setGravity(Gravity.CENTER);bar.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));page.addView(bar);
-        detailMap=new WebView(this);detailMap.getSettings().setJavaScriptEnabled(true);detailMap.setWebChromeClient(new WebChromeClient());detailMap.setWebViewClient(new WebViewClient(){@Override public void onPageFinished(WebView view,String url){view.evaluateJavascript("renderTrip("+trip.toString()+")",null);}});page.addView(detailMap,new LinearLayout.LayoutParams(-1,0,1));detailMap.loadUrl("file:///android_asset/trip_detail.html");
+        detailMap=new WebView(this);detailMap.getSettings().setJavaScriptEnabled(true);detailMap.getSettings().setUserAgentString(detailMap.getSettings().getUserAgentString()+" GPS-Speedometer/2.0");detailMap.setWebChromeClient(new WebChromeClient());detailMap.setWebViewClient(new WebViewClient(){@Override public void onPageFinished(WebView view,String url){view.evaluateJavascript("renderTrip("+trip.toString()+")",null);}});page.addView(detailMap,new LinearLayout.LayoutParams(-1,0,1));detailMap.loadUrl("file:///android_asset/trip_detail.html");
         setContentView(page);
     }
 
