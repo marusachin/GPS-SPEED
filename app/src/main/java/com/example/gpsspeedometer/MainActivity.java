@@ -10,6 +10,10 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.location.GnssStatus;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
@@ -47,6 +51,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MainActivity extends Activity implements LocationListener {
     private static final int REQUEST_LOCATION = 10;
     private LocationManager locationManager;
+    private SensorManager sensorManager;
+    private Sensor rotationVectorSensor;
+    private double latestCompassDegrees=Double.NaN;
+    private long lastCompassUpdateMs=0;
     private FusedLocationProviderClient fusedLocationClient;
     private boolean highAccuracyLocation = true;
     private float latestAccuracyMeters = Float.NaN;
@@ -81,6 +89,22 @@ public class MainActivity extends Activity implements LocationListener {
     private final ExecutorService elevationLookupExecutor=Executors.newSingleThreadExecutor();
     private final AtomicInteger elevationQueryId=new AtomicInteger(0);
     private int satellitesInFix = 0;
+    private final SensorEventListener compassListener = new SensorEventListener() {
+        private final float[] rotationMatrix = new float[9];
+        private final float[] orientation = new float[3];
+        @Override public void onSensorChanged(SensorEvent event) {
+            if(event.sensor.getType()!=Sensor.TYPE_ROTATION_VECTOR)return;
+            SensorManager.getRotationMatrixFromVector(rotationMatrix,event.values);
+            SensorManager.getOrientation(rotationMatrix,orientation);
+            double degrees=(Math.toDegrees(orientation[0])+360.0)%360.0;
+            long now=System.currentTimeMillis();
+            if(event.accuracy==SensorManager.SENSOR_STATUS_UNRELIABLE||now-lastCompassUpdateMs<75)return;
+            latestCompassDegrees=degrees;
+            lastCompassUpdateMs=now;
+            if(mapReady)map.evaluateJavascript("javascript:setCompassHeading("+degrees+","+event.accuracy+")",null);
+        }
+        @Override public void onAccuracyChanged(Sensor sensor,int accuracy) {}
+    };
     private final GnssStatus.Callback gnssCallback = new GnssStatus.Callback() {
         @Override public void onSatelliteStatusChanged(GnssStatus status) {
             int used = 0; float strongest = 0;
@@ -94,6 +118,8 @@ public class MainActivity extends Activity implements LocationListener {
         getWindow().setStatusBarColor(Color.rgb(10, 18, 32));
         getWindow().setNavigationBarColor(Color.rgb(10, 18, 32));
         locationManager = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
+        sensorManager = (SensorManager)getSystemService(Context.SENSOR_SERVICE);
+        rotationVectorSensor = sensorManager!=null?sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR):null;
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         highAccuracyLocation = getSharedPreferences("gps_settings", MODE_PRIVATE).getBoolean("high_accuracy_location", true);
         migrateOldHistory();
@@ -283,6 +309,8 @@ public class MainActivity extends Activity implements LocationListener {
         recording=false;paused=false;activeMillis=0;previousTripPoint=null;recordButton.setText("START");updateTrip();
     }
     @JavascriptInterface public void stopTrip(){runOnUiThread(()->{if(recording){new AlertDialog.Builder(this).setTitle("Stop and save trip?").setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->saveTrip()).show();}});}
+    @Override protected void onResume(){super.onResume();if(sensorManager!=null&&rotationVectorSensor!=null)sensorManager.registerListener(compassListener,rotationVectorSensor,SensorManager.SENSOR_DELAY_UI);}
+    @Override protected void onPause(){if(sensorManager!=null)sensorManager.unregisterListener(compassListener);super.onPause();}
     @Override protected void onDestroy(){super.onDestroy();altitudeWorker.shutdown();elevationLookupExecutor.shutdownNow();stopLocationUpdates();try{if(Build.VERSION.SDK_INT>=24)locationManager.unregisterGnssStatusCallback(gnssCallback);}catch(Exception ignored){}}
     private static class Api34Altitude{
         private static final android.location.altitude.AltitudeConverter CONVERTER=new android.location.altitude.AltitudeConverter();
