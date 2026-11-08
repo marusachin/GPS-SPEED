@@ -82,6 +82,7 @@ public class MainActivity extends Activity implements LocationListener {
         recordButton = button("START"); recordButton.setOnClickListener(v -> toggleTrip()); buttons.addView(recordButton,new LinearLayout.LayoutParams(0,dp(48),1));
         Button stop = button("STOP"); stop.setOnClickListener(v -> confirmStop()); LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0,dp(48),1); sp.leftMargin=dp(6); buttons.addView(stop,sp);
         Button history = button("HISTORY"); history.setOnClickListener(v -> showHistory()); LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0,dp(48),1); hp.leftMargin=dp(6); buttons.addView(history,hp); root.addView(buttons);
+        Button satellites = button("SATELLITES"); satellites.setTextSize(11); satellites.setOnClickListener(v -> startActivity(new Intent(this,SatelliteActivity.class))); LinearLayout.LayoutParams satp = new LinearLayout.LayoutParams(0,dp(48),1); satp.leftMargin=dp(6); buttons.addView(satellites,satp);
         setContentView(root);
     }
     private int dp(int value){return (int)(value*getResources().getDisplayMetrics().density+0.5f);}
