@@ -34,7 +34,7 @@ public class SatelliteActivity extends Activity {
             for(int i=0;i<status.getSatelliteCount();i++){
                 float cn0=status.getCn0DbHz(i);boolean inFix=status.usedInFix(i);if(inFix)used++;
                 if(cn0>=30)strong++;else if(cn0>=20)fair++;else weak++;sum+=cn0;
-                satellites.add(new Sat(name(status.getConstellationType()),status.getSvid(),cn0,inFix,status.getElevationDegrees(i),status.getAzimuthDegrees(i)));
+                satellites.add(new Sat(name(status.getConstellationType(i)),status.getSvid(i),cn0,inFix,status.getElevationDegrees(i),status.getAzimuthDegrees(i)));
             }
             final int visible=status.getSatelliteCount(),fix=used,s=strong,f=fair,w=weak;final float avg=visible>0?sum/visible:0;
             runOnUiThread(()->render(visible,fix,s,f,w,avg));
