@@ -5,8 +5,8 @@ GPS speed in km/h, GPS status and accuracy, live location and route, trip record
 ## Build and install
 
 1. In GitHub, open **Actions → Build GPS Speedometer APK** and wait for the latest run to show a green check.
-2. Open that run and download artifact **GPS-Speedometer-v2.0**.
-3. Extract the downloaded ZIP, tap `GPS-Speedometer-v2.0.apk`, allow installation when Android prompts, and tap **Install**.
+2. Open that run and download artifact **GPS-Speedometer-v2.1**.
+3. Extract the downloaded ZIP, tap `GPS-Speedometer-v2.1.apk`, allow installation when Android prompts, and tap **Install**.
 
 This is a personally installable debug APK, not a Play Store release.
 
@@ -20,7 +20,9 @@ Tap **⛶** to expand the map. Altitude appears at upper left, direction in degr
 
 ## Trip playback
 
-Open **History**, select a trip, then use **Play**, the speed selector, and the seek bar on the trip map. A direction arrow follows the saved route while the map pans along with it, and the recorded speed and elapsed time are shown. Newly recorded trips save per-point GPS speed and bearing. Older trips estimate speed from route points and timestamps where possible.
+Open **History**, select a trip, then use **Play**, the speed selector, and the seek bar on the trip map. A direction arrow follows the saved route while the map pans along with it, and the recorded speed and elapsed time are shown. The graph can show distance travelled on its vertical axis or altitude against distance; its moving dot stays in sync with playback. Newly recorded trips save per-point GPS speed and bearing. Older trips estimate speed from route points and timestamps where possible.
 
 GPS speed and route recording require location permission and Location/GPS enabled. The live map arrow keeps its last reliable direction when movement is too slow for a stable heading. Android 14 and later can show mean-sea-level altitude when geoid data is available; older versions show GPS altitude above the WGS84 ellipsoid.
+
+
 
