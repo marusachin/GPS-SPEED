@@ -146,11 +146,11 @@ public class MainActivity extends Activity implements LocationListener {
         latestAccuracyMeters=accuracy;
         boolean gps=locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
         String fixLabel=accuracy>35f?"Weak GPS fix":(highAccuracyLocation?"High accuracy fix":(gps?"GPS fix":"GPS off"));
-        String accuracyLabel=Float.isFinite(accuracy)?String.format(Locale.getDefault()," • Accuracy ±%.0f m",accuracy):" • Accuracy unavailable";
+        String accuracyLabel=(!Float.isNaN(accuracy)&&!Float.isInfinite(accuracy))?String.format(Locale.getDefault()," • Accuracy ±%.0f m",accuracy):" • Accuracy unavailable";
         detailView.setText(fixLabel+accuracyLabel);
         updateMapGpsInfo();
 
-        if(!Float.isFinite(accuracy)||accuracy>50f){
+        if(Float.isNaN(accuracy)||Float.isInfinite(accuracy)||accuracy>35f){
             if(now-lastAcceptedMovementAt>2500)smoothedSpeedKmh=0;
             latestSpeedKmh=smoothedSpeedKmh;
             speedView.setText(String.format(Locale.getDefault(),"%.0f",latestSpeedKmh));
