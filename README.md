@@ -8,8 +8,8 @@ This Android app shows GPS speed in km/h, current GPS accuracy/status, your live
 2. On the repository page, choose **Add file → Upload files**.
 3. Upload the contents of this project folder, keeping the `.github/workflows/build-apk.yml` path. Commit the upload to the `main` branch.
 4. Open the repository's **Actions** tab. Wait for **Build GPS Speedometer APK** to finish with a green check.
-5. Open that completed run, scroll to **Artifacts**, and download `GPS-Speedometer-debug-APK`.
-6. Extract the downloaded ZIP and open `app-debug.apk`. If Android asks, allow your browser or Files app to install unknown apps, then tap Install.
+5. Open that completed run, scroll to **Artifacts**, and download `GPS-Speedometer-v1.1`.
+6. Extract the downloaded ZIP and open `GPS-Speedometer-v1.1.apk`. If Android asks, allow your browser or Files app to install unknown apps, then tap Install.
 
 The debug APK is signed with Android's standard debug key and is installable. It is intended for personal use and is not a Play Store release.
 

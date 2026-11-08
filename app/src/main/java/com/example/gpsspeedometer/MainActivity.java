@@ -8,7 +8,11 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.location.GnssStatus;
 import android.os.Bundle;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
@@ -29,7 +33,7 @@ import java.util.Locale;
 public class MainActivity extends Activity implements LocationListener {
     private static final int REQUEST_LOCATION = 10;
     private LocationManager locationManager;
-    private TextView speedView, detailView, tripView;
+    private TextView speedView, detailView, tripView, signalView;
     private WebView map;
     private Button recordButton;
     private boolean mapReady = false, recording = false, paused = false;
@@ -37,6 +41,14 @@ public class MainActivity extends Activity implements LocationListener {
     private float maxKmh = 0;
     private long startedAt = 0;
     private double distanceMeters = 0;
+    private int satellitesInFix = 0;
+    private final GnssStatus.Callback gnssCallback = new GnssStatus.Callback() {
+        @Override public void onSatelliteStatusChanged(GnssStatus status) {
+            int used = 0; float strongest = 0;
+            for (int i=0; i<status.getSatelliteCount(); i++) if(status.usedInFix(i)) { used++; strongest=Math.max(strongest,status.getCn0DbHz(i)); }
+            satellitesInFix=used; updateSignal(strongest);
+        }
+    };
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -51,27 +63,32 @@ public class MainActivity extends Activity implements LocationListener {
 
     private void buildUi() {
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(Color.rgb(10,18,32));
-        TextView title = new TextView(this); title.setText("GPS SPEEDOMETER"); title.setTextColor(Color.WHITE); title.setTextSize(17); title.setGravity(Gravity.CENTER); title.setPadding(8,14,8,4); root.addView(title);
-        speedView = new TextView(this); speedView.setText("0"); speedView.setTextColor(Color.WHITE); speedView.setTextSize(66); speedView.setGravity(Gravity.CENTER); speedView.setPadding(0,0,0,0); root.addView(speedView);
-        TextView units = new TextView(this); units.setText("km/h"); units.setTextColor(Color.rgb(90,190,255)); units.setTextSize(16); units.setGravity(Gravity.CENTER); root.addView(units);
-        detailView = new TextView(this); detailView.setText("Waiting for GPS…"); detailView.setTextColor(Color.LTGRAY); detailView.setTextSize(13); detailView.setGravity(Gravity.CENTER); detailView.setPadding(8,6,8,8); root.addView(detailView);
+        root.setOnApplyWindowInsetsListener((v,insets)->{int top=0,bottom=0;if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(android.view.WindowInsets.Type.systemBars());top=bars.top;bottom=bars.bottom;}else{top=insets.getSystemWindowInsetTop();bottom=insets.getSystemWindowInsetBottom();}v.setPadding(dp(12),top+dp(4),dp(12),bottom+dp(8));return insets;});
+        LinearLayout header = new LinearLayout(this); header.setOrientation(LinearLayout.HORIZONTAL); header.setGravity(Gravity.CENTER_VERTICAL); header.setPadding(4,dp(6),4,dp(4));
+        TextView title = new TextView(this); title.setText("GPS SPEEDOMETER"); title.setTextColor(Color.WHITE); title.setTextSize(16); title.setGravity(Gravity.CENTER_VERTICAL); title.setTypeface(null,android.graphics.Typeface.BOLD); header.addView(title,new LinearLayout.LayoutParams(0,dp(38),1));
+        signalView = new TextView(this); signalView.setText("● GPS searching"); signalView.setTextColor(Color.rgb(255,190,80)); signalView.setTextSize(13); signalView.setGravity(Gravity.CENTER_VERTICAL); header.addView(signalView); root.addView(header);
+        speedView = new TextView(this); speedView.setText("0"); speedView.setTextColor(Color.WHITE); speedView.setTextSize(62); speedView.setGravity(Gravity.CENTER); root.addView(speedView,new LinearLayout.LayoutParams(-1,dp(84)));
+        TextView units = new TextView(this); units.setText("km/h"); units.setTextColor(Color.rgb(90,190,255)); units.setTextSize(16); units.setGravity(Gravity.CENTER); root.addView(units,new LinearLayout.LayoutParams(-1,dp(25)));
+        detailView = new TextView(this); detailView.setText("Waiting for GPS • Accuracy —"); detailView.setTextColor(Color.LTGRAY); detailView.setTextSize(13); detailView.setGravity(Gravity.CENTER); detailView.setPadding(8,dp(2),8,dp(8)); root.addView(detailView);
         map = new WebView(this); map.setBackgroundColor(Color.rgb(30,42,55)); map.getSettings().setJavaScriptEnabled(true); map.setWebChromeClient(new WebChromeClient()); map.setWebViewClient(new WebViewClient(){@Override public void onPageFinished(WebView v,String u){mapReady=true;}}); map.addJavascriptInterface(this,"Android"); map.loadUrl("file:///android_asset/map.html");
         root.addView(map,new LinearLayout.LayoutParams(-1,0,1));
-        tripView = new TextView(this); tripView.setText("Trip: 0.00 km   •   Max: 0 km/h"); tripView.setTextColor(Color.WHITE); tripView.setGravity(Gravity.CENTER); tripView.setPadding(4,10,4,10); root.addView(tripView);
-        LinearLayout buttons = new LinearLayout(this); buttons.setPadding(10,4,10,14); buttons.setGravity(Gravity.CENTER); buttons.setOrientation(LinearLayout.HORIZONTAL);
-        recordButton = button("START TRIP"); recordButton.setOnClickListener(v -> toggleTrip()); buttons.addView(recordButton,new LinearLayout.LayoutParams(0,54,1));
-        Button stop = button("STOP"); stop.setOnClickListener(v -> confirmStop()); LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0,54,1); sp.leftMargin=6; buttons.addView(stop,sp);
-        Button history = button("HISTORY"); history.setOnClickListener(v -> showHistory()); LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0,54,1); hp.leftMargin=6; buttons.addView(history,hp); root.addView(buttons);
+        tripView = new TextView(this); tripView.setText("Trip: 0.00 km   •   Max: 0 km/h"); tripView.setTextColor(Color.WHITE); tripView.setTextSize(15); tripView.setGravity(Gravity.CENTER); tripView.setPadding(4,dp(8),4,dp(8)); root.addView(tripView,new LinearLayout.LayoutParams(-1,dp(42)));
+        LinearLayout buttons = new LinearLayout(this); buttons.setPadding(0,dp(2),0,dp(6)); buttons.setGravity(Gravity.CENTER); buttons.setOrientation(LinearLayout.HORIZONTAL);
+        recordButton = button("START"); recordButton.setOnClickListener(v -> toggleTrip()); buttons.addView(recordButton,new LinearLayout.LayoutParams(0,dp(48),1));
+        Button stop = button("STOP"); stop.setOnClickListener(v -> confirmStop()); LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0,dp(48),1); sp.leftMargin=dp(6); buttons.addView(stop,sp);
+        Button history = button("HISTORY"); history.setOnClickListener(v -> showHistory()); LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0,dp(48),1); hp.leftMargin=dp(6); buttons.addView(history,hp); root.addView(buttons);
         setContentView(root);
     }
-    private Button button(String label){ Button b=new Button(this); b.setText(label); b.setTextColor(Color.WHITE); b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(24,116,210))); return b; }
+    private int dp(int value){return (int)(value*getResources().getDisplayMetrics().density+0.5f);}
+    private Button button(String label){ Button b=new Button(this); b.setText(label); b.setTextSize(13); b.setMinHeight(0); b.setMinimumHeight(0); b.setPadding(dp(4),0,dp(4),0); b.setTextColor(Color.WHITE); b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(24,116,210))); return b; }
 
     @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results){ super.onRequestPermissionsResult(requestCode,permissions,results); if(requestCode==REQUEST_LOCATION && results.length>0 && results[0]==PackageManager.PERMISSION_GRANTED) startGps(); else detailView.setText("Location permission is needed for GPS speed and route."); }
-    private void startGps(){ try { if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)return; locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,1000,0,this); detailView.setText("GPS on • Waiting for a satellite fix…"); } catch(Exception e){detailView.setText("Turn on Location in phone settings.");} }
+    private void startGps(){ try { if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)return; locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,1000,0,this); if(Build.VERSION.SDK_INT>=24)locationManager.registerGnssStatusCallback(gnssCallback,new Handler(Looper.getMainLooper())); detailView.setText("GPS on • Waiting for a satellite fix…"); } catch(Exception e){detailView.setText("Turn on Location in phone settings.");} }
+    private void updateSignal(float cn0){ if(signalView==null)return; String label=satellitesInFix==0?"● GPS searching":satellitesInFix+" satellites • "+(cn0>=30?"Strong":cn0>=20?"Fair":"Weak"); signalView.setText(label);signalView.setTextColor(satellitesInFix==0?Color.rgb(255,190,80):cn0>=20?Color.rgb(90,220,140):Color.rgb(255,190,80)); }
     @Override public void onLocationChanged(Location loc){
         float kmh=loc.hasSpeed()?loc.getSpeed()*3.6f:0; speedView.setText(String.format(Locale.getDefault(),"%.0f",kmh));
         boolean gps=locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-        detailView.setText((gps?"GPS active":"GPS off")+" • Accuracy ±"+String.format(Locale.getDefault(),"%.0f",loc.getAccuracy())+" m");
+        detailView.setText((gps?"GPS fix":"GPS off")+" • Accuracy ±"+String.format(Locale.getDefault(),"%.0f",loc.getAccuracy())+" m");
         if(recording && !paused){ if(!points.isEmpty())distanceMeters+=points.get(points.size()-1).distanceTo(loc); points.add(loc); maxKmh=Math.max(maxKmh,kmh); }
         updateTrip(); if(mapReady){String js="javascript:setPoint("+loc.getLatitude()+","+loc.getLongitude()+","+loc.getAccuracy()+")"; map.evaluateJavascript(js,null);}
     }
@@ -93,7 +110,7 @@ public class MainActivity extends Activity implements LocationListener {
     @Override public void onProviderEnabled(String p){detailView.setText("GPS active • Waiting for location…");}
     @Override public void onProviderDisabled(String p){detailView.setText("GPS is off • Turn on Location in settings.");}
     @Override public void onStatusChanged(String p,int s,Bundle b){}
-    @Override protected void onDestroy(){super.onDestroy();try{locationManager.removeUpdates(this);}catch(Exception ignored){}}
+    @Override protected void onDestroy(){super.onDestroy();try{locationManager.removeUpdates(this);if(Build.VERSION.SDK_INT>=24)locationManager.unregisterGnssStatusCallback(gnssCallback);}catch(Exception ignored){}}
     @Override public void onBackPressed(){ if(recording){new AlertDialog.Builder(this).setTitle("Stop trip?").setMessage("Save this trip before closing?").setNegativeButton("Keep recording",(d,w)->{}).setPositiveButton("Stop and save",(d,w)->saveTrip()).show();}else super.onBackPressed(); }
     private void saveTrip(){try{JSONArray a=new JSONArray(getPreferences(0).getString("history","[]"));JSONObject o=new JSONObject();o.put("date",new SimpleDateFormat("MMM d, yyyy HH:mm",Locale.getDefault()).format(new Date()));o.put("distance",String.format(Locale.US,"%.2f",distanceMeters/1000));o.put("max",String.format(Locale.US,"%.0f",maxKmh));a.put(o);getPreferences(0).edit().putString("history",a.toString()).apply();}catch(Exception ignored){} recording=false;paused=false;recordButton.setText("START TRIP");updateTrip(); }
     @JavascriptInterface public void stopTrip(){runOnUiThread(()->{if(recording){new AlertDialog.Builder(this).setTitle("Stop and save trip?").setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->saveTrip()).show();}});}
