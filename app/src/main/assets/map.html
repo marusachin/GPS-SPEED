@@ -1,1 +1,14 @@
-<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><style>html,body,#map{height:100%;margin:0;background:#dfe8ee}.leaflet-control-attribution{font-size:9px}</style></head><body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>let map=L.map('map').setView([20,0],2);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);let marker=null,route=L.polyline([],{color:'#0878e8',weight:5}).addTo(map),first=true;function setPoint(lat,lon,acc){let p=[lat,lon];if(!marker){marker=L.circleMarker(p,{radius:8,color:'#fff',weight:3,fillColor:'#0878e8',fillOpacity:1}).addTo(map)}else marker.setLatLng(p);route.addLatLng(p);if(first){map.setView(p,16);first=false}else map.panTo(p,{animate:true,duration:.4})}function clearRoute(){route.setLatLngs([]);first=true}</script></body></html>
+<!doctype html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>html,body,#map{height:100%;margin:0;background:#dfe8ee}.leaflet-control-attribution{font-size:9px}.gps-arrow{background:transparent;border:0}.gps-arrow svg{width:32px;height:32px;overflow:visible;filter:drop-shadow(0 1px 2px #333)}</style></head>
+<body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let map=L.map('map').setView([20,0],2);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+let marker=null,route=L.polyline([],{color:'#0878e8',weight:5}).addTo(map),first=true,lastPoint=null,lastBearing=0;
+function bearingBetween(a,b){let r=Math.PI/180,y=Math.sin((b[1]-a[1])*r)*Math.cos(b[0]*r),x=Math.cos(a[0]*r)*Math.sin(b[0]*r)-Math.sin(a[0]*r)*Math.cos(b[0]*r)*Math.cos((b[1]-a[1])*r);return (Math.atan2(y,x)/r+360)%360}
+function arrowIcon(deg){return L.divIcon({className:'gps-arrow',html:'<svg viewBox="0 0 32 32" style="transform:rotate('+deg+'deg)"><path d="M16 2 L29 29 L16 22 L3 29 Z" fill="#0878e8" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>',iconSize:[32,32],iconAnchor:[16,16]})}
+function setPoint(lat,lon,acc,bearing){let p=[lat,lon],heading=Number(bearing);if(!Number.isFinite(heading)||heading<0){if(lastPoint&&Math.abs(lastPoint[0]-lat)+Math.abs(lastPoint[1]-lon)>0.000001)heading=bearingBetween(lastPoint,p);else heading=lastBearing}lastBearing=heading;lastPoint=p;if(!marker)marker=L.marker(p,{icon:arrowIcon(heading),zIndexOffset:1000}).addTo(map);else marker.setLatLng(p).setIcon(arrowIcon(heading));route.addLatLng(p);if(first){map.setView(p,16);first=false}else map.panTo(p,{animate:true,duration:.4})}
+function clearRoute(){route.setLatLngs([]);first=true;lastPoint=null}
+</script></body></html>
+

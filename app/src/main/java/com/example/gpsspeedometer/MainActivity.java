@@ -34,7 +34,7 @@ import java.util.Locale;
 public class MainActivity extends Activity implements LocationListener {
     private static final int REQUEST_LOCATION = 10;
     private LocationManager locationManager;
-    private TextView speedView, detailView, tripView, signalView;
+    private TextView speedView, detailView, tripView, signalView, altitudeView;
     private WebView map;
     private Button recordButton;
     private boolean mapReady = false, recording = false, paused = false;
@@ -73,6 +73,7 @@ public class MainActivity extends Activity implements LocationListener {
         signalView = new TextView(this); signalView.setText("● GPS searching"); signalView.setTextColor(Color.rgb(255,190,80)); signalView.setTextSize(13); signalView.setGravity(Gravity.CENTER_VERTICAL); header.addView(signalView); root.addView(header);
         speedView = new TextView(this); speedView.setText("0"); speedView.setTextColor(Color.WHITE); speedView.setTextSize(62); speedView.setGravity(Gravity.CENTER); root.addView(speedView,new LinearLayout.LayoutParams(-1,dp(84)));
         TextView units = new TextView(this); units.setText("km/h"); units.setTextColor(Color.rgb(90,190,255)); units.setTextSize(16); units.setGravity(Gravity.CENTER); root.addView(units,new LinearLayout.LayoutParams(-1,dp(25)));
+        altitudeView = new TextView(this); altitudeView.setText("Altitude — m"); altitudeView.setTextColor(Color.WHITE); altitudeView.setTextSize(14); altitudeView.setGravity(Gravity.CENTER); altitudeView.setPadding(0,dp(2),0,dp(2)); root.addView(altitudeView,new LinearLayout.LayoutParams(-1,dp(24)));
         detailView = new TextView(this); detailView.setText("Waiting for GPS • Accuracy —"); detailView.setTextColor(Color.LTGRAY); detailView.setTextSize(13); detailView.setGravity(Gravity.CENTER); detailView.setPadding(8,dp(2),8,dp(8)); root.addView(detailView);
         map = new WebView(this); map.setBackgroundColor(Color.rgb(30,42,55)); map.getSettings().setJavaScriptEnabled(true); map.setWebChromeClient(new WebChromeClient()); map.setWebViewClient(new WebViewClient(){@Override public void onPageFinished(WebView v,String u){mapReady=true;}}); map.addJavascriptInterface(this,"Android"); map.loadUrl("file:///android_asset/map.html");
         root.addView(map,new LinearLayout.LayoutParams(-1,0,1));
@@ -93,8 +94,9 @@ public class MainActivity extends Activity implements LocationListener {
         float kmh=loc.hasSpeed()?loc.getSpeed()*3.6f:0; speedView.setText(String.format(Locale.getDefault(),"%.0f",kmh));
         boolean gps=locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
         detailView.setText((gps?"GPS fix":"GPS off")+" • Accuracy ±"+String.format(Locale.getDefault(),"%.0f",loc.getAccuracy())+" m");
+        altitudeView.setText(loc.hasAltitude()?String.format(Locale.getDefault(),"Altitude %.0f m",loc.getAltitude()):"Altitude unavailable");
         if(recording && !paused){ if(previousTripPoint!=null)distanceMeters+=previousTripPoint.distanceTo(loc); previousTripPoint=new Location(loc); if(points.size()<6000)points.add(new Location(loc)); maxKmh=Math.max(maxKmh,kmh); }
-        updateTrip(); if(mapReady){String js="javascript:setPoint("+loc.getLatitude()+","+loc.getLongitude()+","+loc.getAccuracy()+")"; map.evaluateJavascript(js,null);}
+        updateTrip(); if(mapReady){double bearing=loc.hasBearing()?loc.getBearing():-1;String js="javascript:setPoint("+loc.getLatitude()+","+loc.getLongitude()+","+loc.getAccuracy()+","+bearing+")";map.evaluateJavascript(js,null);}
     }
     private void toggleTrip(){
         if(!recording){recording=true;paused=false;startedAt=System.currentTimeMillis();activeSegmentStartedAt=startedAt;activeMillis=0;distanceMeters=0;maxKmh=0;points.clear();previousTripPoint=null;recordButton.setText("PAUSE TRIP");if(mapReady)map.evaluateJavascript("javascript:clearRoute()",null);}
