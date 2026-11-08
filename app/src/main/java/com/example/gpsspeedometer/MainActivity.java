@@ -50,6 +50,9 @@ public class MainActivity extends Activity implements LocationListener {
     private FusedLocationProviderClient fusedLocationClient;
     private boolean highAccuracyLocation = true;
     private float latestAccuracyMeters = Float.NaN;
+    private Location lastAcceptedMapLocation;
+    private float smoothedSpeedKmh = 0;
+    private long lastAcceptedMovementAt = 0;
     private final LocationCallback fusedLocationCallback = new LocationCallback() {
         @Override public void onLocationResult(LocationResult result) {
             if (result != null && result.getLastLocation() != null) MainActivity.this.onLocationChanged(result.getLastLocation());
@@ -137,13 +140,93 @@ public class MainActivity extends Activity implements LocationListener {
     private void updateMapGpsInfo(){ if(mapReady && !Float.isNaN(latestAccuracyMeters)){map.evaluateJavascript("javascript:setGpsInfo("+latestAccuracyMeters+","+satellitesInFix+","+highAccuracyLocation+")",null);} }
     private void updateSignal(float cn0){ if(signalView==null)return; String label=satellitesInFix==0?"● GPS searching":satellitesInFix+" satellites • "+(cn0>=30?"Strong":cn0>=20?"Fair":"Weak"); signalView.setText(label);signalView.setTextColor(satellitesInFix==0?Color.rgb(255,190,80):cn0>=20?Color.rgb(90,220,140):Color.rgb(255,190,80)); }
     @Override public void onLocationChanged(Location loc){
-        float kmh=loc.hasSpeed()?loc.getSpeed()*3.6f:0; speedView.setText(String.format(Locale.getDefault(),"%.0f",kmh));
+        if(loc==null)return;
+        long now=System.currentTimeMillis();
+        float accuracy=loc.hasAccuracy()?loc.getAccuracy():Float.POSITIVE_INFINITY;
+        latestAccuracyMeters=accuracy;
         boolean gps=locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-        latestAccuracyMeters=loc.getAccuracy(); detailView.setText((highAccuracyLocation?"High accuracy fix":(gps?"GPS fix":"GPS off"))+" • Accuracy ±"+String.format(Locale.getDefault(),"%.0f",loc.getAccuracy())+" m"); updateMapGpsInfo();
-        prepareAltitude(loc);
-        latestSpeedKmh=kmh;sessionMaxKmh=Math.max(sessionMaxKmh,kmh);
-        if(recording && !paused){ if(previousTripPoint!=null)distanceMeters+=previousTripPoint.distanceTo(loc); previousTripPoint=new Location(loc); if(points.size()<6000)points.add(new Location(loc)); maxKmh=Math.max(maxKmh,kmh); }
-        updateTrip(); if(mapReady){double bearing=loc.hasBearing()?loc.getBearing():-1;double bearingAccuracy=Build.VERSION.SDK_INT>=26&&loc.hasBearingAccuracy()?loc.getBearingAccuracyDegrees():-1;double speed=loc.hasSpeed()?loc.getSpeed():0;String js="javascript:setPoint("+loc.getLatitude()+","+loc.getLongitude()+","+loc.getAccuracy()+","+bearing+","+speed+","+bearingAccuracy+")";map.evaluateJavascript(js,null);updateMapInfo();}
+        String fixLabel=accuracy>35f?"Weak GPS fix":(highAccuracyLocation?"High accuracy fix":(gps?"GPS fix":"GPS off"));
+        String accuracyLabel=Float.isFinite(accuracy)?String.format(Locale.getDefault()," • Accuracy ±%.0f m",accuracy):" • Accuracy unavailable";
+        detailView.setText(fixLabel+accuracyLabel);
+        updateMapGpsInfo();
+
+        if(!Float.isFinite(accuracy)||accuracy>50f){
+            if(now-lastAcceptedMovementAt>2500)smoothedSpeedKmh=0;
+            latestSpeedKmh=smoothedSpeedKmh;
+            speedView.setText(String.format(Locale.getDefault(),"%.0f",latestSpeedKmh));
+            updateTrip();
+            updateMapInfo();
+            return;
+        }
+
+        Location previous=lastAcceptedMapLocation;
+        float movedMeters=previous==null?0:previous.distanceTo(loc);
+        double elapsedSeconds=previous==null?0:(loc.getTime()-previous.getTime())/1000.0;
+        if(previous!=null&&elapsedSeconds<=0)elapsedSeconds=Math.max(0.5,(now-previous.getTime())/1000.0);
+        float noiseFloor=previous==null?0:Math.max(8f,Math.min(20f,Math.max(loc.getAccuracy(),previous.getAccuracy())));
+        float reportedSpeed=loc.hasSpeed()?Math.max(0,loc.getSpeed()):0;
+        boolean speedAccuracyGood=true;
+        if(Build.VERSION.SDK_INT>=26&&loc.hasSpeedAccuracy())speedAccuracyGood=loc.getSpeedAccuracyMetersPerSecond()<=2.5f;
+        float derivedSpeed=elapsedSeconds>0.25? (float)(movedMeters/elapsedSeconds):0;
+        boolean speedCorroborates=loc.hasSpeed()&&speedAccuracyGood&&reportedSpeed>=0.8f&&Math.abs(derivedSpeed-reportedSpeed)<=Math.max(3f,reportedSpeed*0.65f);
+        boolean positionAccepted=previous==null;
+        if(previous!=null&&elapsedSeconds>0){
+            float jumpLimit=(float)Math.max(50.0,elapsedSeconds*55.0);
+            boolean plausibleJump=movedMeters<=jumpLimit;
+            boolean enoughMovement=movedMeters>=noiseFloor;
+            boolean independentlyClearMovement=movedMeters>=noiseFloor*3.0f;
+            positionAccepted=plausibleJump&&enoughMovement&&(speedCorroborates||independentlyClearMovement);
+            if(derivedSpeed>45f&&!speedCorroborates)positionAccepted=false;
+        }
+
+        float speedMps=reportedSpeed;
+        if(!loc.hasSpeed()||!speedAccuracyGood){
+            speedMps=positionAccepted&&previous!=null?derivedSpeed:0;
+        }
+        if(positionAccepted){
+            lastAcceptedMapLocation=new Location(loc);
+            if(speedMps>=0.55f){
+                float sampleKmh=speedMps*3.6f;
+                smoothedSpeedKmh=smoothedSpeedKmh==0?sampleKmh:(smoothedSpeedKmh*0.65f+sampleKmh*0.35f);
+                lastAcceptedMovementAt=now;
+            }else{
+                smoothedSpeedKmh=0;
+                lastAcceptedMovementAt=0;
+            }
+        }else if(now-lastAcceptedMovementAt>2500){
+            smoothedSpeedKmh=0;
+        }
+        latestSpeedKmh=smoothedSpeedKmh;
+        if(positionAccepted)sessionMaxKmh=Math.max(sessionMaxKmh,latestSpeedKmh);
+        speedView.setText(String.format(Locale.getDefault(),"%.0f",latestSpeedKmh));
+
+        if(positionAccepted)prepareAltitude(loc);
+        if(recording&&!paused&&positionAccepted&&accuracy<=35f){
+            Location trackPoint=new Location(loc);
+            trackPoint.setSpeed(latestSpeedKmh/3.6f);
+            if(previousTripPoint==null){
+                previousTripPoint=trackPoint;
+                if(points.size()<6000)points.add(new Location(trackPoint));
+            }else{
+                double trackElapsed=Math.max(0.5,(trackPoint.getTime()-previousTripPoint.getTime())/1000.0);
+                float trackDistance=previousTripPoint.distanceTo(trackPoint);
+                if(trackDistance<=Math.max(50.0,trackElapsed*55.0)){
+                    distanceMeters+=trackDistance;
+                    previousTripPoint=trackPoint;
+                    if(points.size()<6000)points.add(new Location(trackPoint));
+                    maxKmh=Math.max(maxKmh,latestSpeedKmh);
+                }
+            }
+        }
+        updateTrip();
+        if(mapReady&&positionAccepted){
+            double bearing=loc.hasBearing()?loc.getBearing():-1;
+            double bearingAccuracy=Build.VERSION.SDK_INT>=26&&loc.hasBearingAccuracy()?loc.getBearingAccuracyDegrees():-1;
+            double speed=latestSpeedKmh/3.6;
+            String js="javascript:setPoint("+loc.getLatitude()+","+loc.getLongitude()+","+loc.getAccuracy()+","+bearing+","+speed+","+bearingAccuracy+")";
+            map.evaluateJavascript(js,null);
+        }
+        if(mapReady)updateMapInfo();
     }
     private void prepareAltitude(Location loc){
         if(!loc.hasAltitude()){altitudeView.setText("Altitude unavailable");latestAltitudeKnown=false;updateMapInfo();return;}
