@@ -14,12 +14,6 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationCallback;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationResult;
-import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.location.Priority;
 import android.os.Bundle;
 import android.os.Build;
 import android.os.Handler;
@@ -55,18 +49,11 @@ public class MainActivity extends Activity implements LocationListener {
     private Sensor rotationVectorSensor;
     private double latestCompassDegrees=Double.NaN;
     private long lastCompassUpdateMs=0;
-    private FusedLocationProviderClient fusedLocationClient;
-    private boolean highAccuracyLocation = true;
     private float latestAccuracyMeters = Float.NaN;
     private Location lastAcceptedMapLocation;
     private float smoothedSpeedKmh = 0;
     private long lastAcceptedMovementAt = 0;
-    private final LocationCallback fusedLocationCallback = new LocationCallback() {
-        @Override public void onLocationResult(LocationResult result) {
-            if (result != null && result.getLastLocation() != null) MainActivity.this.onLocationChanged(result.getLastLocation());
-        }
-    };
-    private TextView speedView, detailView, tripView, signalView, altitudeView, locationModeView;
+    private TextView speedView, detailView, tripView, signalView, altitudeView;
     private WebView map;
     private View dashboard;
     private LinearLayout bottomControls;
@@ -120,8 +107,6 @@ public class MainActivity extends Activity implements LocationListener {
         locationManager = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
         sensorManager = (SensorManager)getSystemService(Context.SENSOR_SERVICE);
         rotationVectorSensor = sensorManager!=null?sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR):null;
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-        highAccuracyLocation = getSharedPreferences("gps_settings", MODE_PRIVATE).getBoolean("high_accuracy_location", true);
         migrateOldHistory();
         buildUi();
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)
@@ -140,7 +125,6 @@ public class MainActivity extends Activity implements LocationListener {
         TextView units = new TextView(this); units.setText("km/h"); units.setTextColor(Color.rgb(90,190,255)); units.setTextSize(16); units.setGravity(Gravity.CENTER); dashboardAdd(units,new LinearLayout.LayoutParams(-1,dp(25)));
         altitudeView = new TextView(this); altitudeView.setText("GPS altitude — m"); altitudeView.setTextColor(Color.WHITE); altitudeView.setTextSize(12); altitudeView.setGravity(Gravity.CENTER); altitudeView.setPadding(0,dp(2),0,dp(2)); dashboardAdd(altitudeView,new LinearLayout.LayoutParams(-1,dp(24)));
         detailView = new TextView(this); detailView.setText("Waiting for location • Accuracy —"); detailView.setTextColor(Color.LTGRAY); detailView.setTextSize(13); detailView.setGravity(Gravity.CENTER); detailView.setPadding(8,dp(2),8,dp(2)); dashboardAdd(detailView);
-        locationModeView = new TextView(this); locationModeView.setTextColor(Color.rgb(90,190,255)); locationModeView.setTextSize(11); locationModeView.setGravity(Gravity.CENTER); locationModeView.setPadding(0,0,0,dp(5)); locationModeView.setOnClickListener(v -> showLocationModeDialog()); updateLocationModeLabel(); dashboardAdd(locationModeView,new LinearLayout.LayoutParams(-1,dp(22)));
         map = new WebView(this); map.setBackgroundColor(Color.rgb(30,42,55)); map.getSettings().setJavaScriptEnabled(true); map.getSettings().setUserAgentString(map.getSettings().getUserAgentString()+" GPS-Speedometer/2.0"); map.setWebChromeClient(new WebChromeClient()); map.setWebViewClient(new WebViewClient(){@Override public void onPageFinished(WebView v,String u){mapReady=true;}}); map.addJavascriptInterface(this,"Android"); map.loadUrl("file:///android_asset/map.html");
         root.addView(map,new LinearLayout.LayoutParams(-1,0,1));
         bottomControls = new LinearLayout(this); bottomControls.setOrientation(LinearLayout.VERTICAL);root.addView(bottomControls,new LinearLayout.LayoutParams(-1,-2));
@@ -159,11 +143,8 @@ public class MainActivity extends Activity implements LocationListener {
     private Button button(String label){ Button b=new Button(this); b.setText(label); b.setTextSize(13); b.setMinHeight(0); b.setMinimumHeight(0); b.setPadding(dp(4),0,dp(4),0); b.setTextColor(Color.WHITE); b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(24,116,210))); return b; }
 
     @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results){ super.onRequestPermissionsResult(requestCode,permissions,results); if(requestCode==REQUEST_LOCATION && results.length>0 && results[0]==PackageManager.PERMISSION_GRANTED) startGps(); else detailView.setText("Location permission is needed for GPS speed and route."); }
-    private void startGps(){ try { if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)return; stopLocationUpdates(); if(highAccuracyLocation){ LocationRequest request=new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY,1000L).setMinUpdateIntervalMillis(750L).setWaitForAccurateLocation(true).build(); fusedLocationClient.requestLocationUpdates(request,fusedLocationCallback,Looper.getMainLooper()).addOnFailureListener(error->{ try { locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,1000,0,this); detailView.setText("High accuracy unavailable • using GPS only"); } catch(Exception ignored){detailView.setText("Turn on Location in phone settings.");} }); detailView.setText("High accuracy on • Waiting for location…"); }else{ locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,1000,0,this); detailView.setText("GPS on • Waiting for a satellite fix…"); } if(Build.VERSION.SDK_INT>=24){try{locationManager.unregisterGnssStatusCallback(gnssCallback);}catch(Exception ignored){} locationManager.registerGnssStatusCallback(gnssCallback,new Handler(Looper.getMainLooper()));} updateLocationModeLabel(); } catch(Exception e){detailView.setText("Turn on Location in phone settings.");} }
-    private void stopLocationUpdates(){ try{locationManager.removeUpdates(this);}catch(Exception ignored){} if(fusedLocationClient!=null)fusedLocationClient.removeLocationUpdates(fusedLocationCallback); }
-    private void showLocationModeDialog(){ String[] modes={"High accuracy (GPS + Wi‑Fi/cellular)","GPS only (satellites)"}; int checked=highAccuracyLocation?0:1; new AlertDialog.Builder(this).setTitle("Location mode").setMessage("High accuracy asks Android to use available GPS, Wi-Fi, cellular networks and sensors. It may use more battery; available sources depend on your phone settings.").setSingleChoiceItems(modes,checked,(dialog,which)->{highAccuracyLocation=(which==0);getSharedPreferences("gps_settings",MODE_PRIVATE).edit().putBoolean("high_accuracy_location",highAccuracyLocation).apply();updateLocationModeLabel();startGps();dialog.dismiss();}).setNegativeButton("Cancel",null).show(); }
-    private void updateLocationModeLabel(){ if(locationModeView!=null)locationModeView.setText(highAccuracyLocation?"Location: High accuracy • Tap to change":"Location: GPS only • Tap to change"); }
-    private void updateMapGpsInfo(){ if(mapReady && !Float.isNaN(latestAccuracyMeters)){map.evaluateJavascript("javascript:setGpsInfo("+latestAccuracyMeters+","+satellitesInFix+","+highAccuracyLocation+")",null);} }
+    private void startGps(){ try { if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)return; locationManager.removeUpdates(this); locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,1000,0,this); if(Build.VERSION.SDK_INT>=24){try{locationManager.unregisterGnssStatusCallback(gnssCallback);}catch(Exception ignored){} locationManager.registerGnssStatusCallback(gnssCallback,new Handler(Looper.getMainLooper()));} detailView.setText("GPS only • Waiting for a satellite fix…"); } catch(Exception e){detailView.setText("Turn on Location in phone settings.");} }
+    private void stopLocationUpdates(){ try{locationManager.removeUpdates(this);}catch(Exception ignored){} }
     private void updateSignal(float cn0){ if(signalView==null)return; String label=satellitesInFix==0?"● GPS searching":satellitesInFix+" satellites • "+(cn0>=30?"Strong":cn0>=20?"Fair":"Weak"); signalView.setText(label);signalView.setTextColor(satellitesInFix==0?Color.rgb(255,190,80):cn0>=20?Color.rgb(90,220,140):Color.rgb(255,190,80)); }
     @Override public void onLocationChanged(Location loc){
         if(loc==null)return;
@@ -171,7 +152,7 @@ public class MainActivity extends Activity implements LocationListener {
         float accuracy=loc.hasAccuracy()?loc.getAccuracy():Float.POSITIVE_INFINITY;
         latestAccuracyMeters=accuracy;
         boolean gps=locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-        String fixLabel=accuracy>35f?"Weak GPS fix":(highAccuracyLocation?"High accuracy fix":(gps?"GPS fix":"GPS off"));
+        String fixLabel=accuracy>35f?"Weak GPS fix":(gps?"GPS fix":"GPS off");
         String accuracyLabel=(!Float.isNaN(accuracy)&&!Float.isInfinite(accuracy))?String.format(Locale.getDefault()," • Accuracy ±%.0f m",accuracy):" • Accuracy unavailable";
         detailView.setText(fixLabel+accuracyLabel);
         updateMapGpsInfo();
