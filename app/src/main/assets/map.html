@@ -5,10 +5,15 @@
 <body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 let map=L.map('map').setView([20,0],2);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
-let marker=null,route=L.polyline([],{color:'#0878e8',weight:5}).addTo(map),first=true,lastPoint=null,lastBearing=0;
+let marker=null,route=L.polyline([],{color:'#0878e8',weight:5}).addTo(map),first=true,lastPoint=null,headingAnchor=null,lastBearing=0,hasBearing=false;
 function bearingBetween(a,b){let r=Math.PI/180,y=Math.sin((b[1]-a[1])*r)*Math.cos(b[0]*r),x=Math.cos(a[0]*r)*Math.sin(b[0]*r)-Math.sin(a[0]*r)*Math.cos(b[0]*r)*Math.cos((b[1]-a[1])*r);return (Math.atan2(y,x)/r+360)%360}
+function smoothBearing(from,to,amount){let delta=((to-from+540)%360)-180;return (from+delta*amount+360)%360}
 function arrowIcon(deg){return L.divIcon({className:'gps-arrow',html:'<svg viewBox="0 0 32 32" style="transform:rotate('+deg+'deg)"><path d="M16 2 L29 29 L16 22 L3 29 Z" fill="#0878e8" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>',iconSize:[32,32],iconAnchor:[16,16]})}
-function setPoint(lat,lon,acc,bearing){let p=[lat,lon],heading=Number(bearing);if(!Number.isFinite(heading)||heading<0){if(lastPoint&&Math.abs(lastPoint[0]-lat)+Math.abs(lastPoint[1]-lon)>0.000001)heading=bearingBetween(lastPoint,p);else heading=lastBearing}lastBearing=heading;lastPoint=p;if(!marker)marker=L.marker(p,{icon:arrowIcon(heading),zIndexOffset:1000}).addTo(map);else marker.setLatLng(p).setIcon(arrowIcon(heading));route.addLatLng(p);if(first){map.setView(p,16);first=false}else map.panTo(p,{animate:true,duration:.4})}
-function clearRoute(){route.setLatLngs([]);first=true;lastPoint=null}
+function setPoint(lat,lon,acc,bearing,speed,bearingAccuracy){let p=[lat,lon],heading=Number(bearing),v=Number(speed),ba=Number(bearingAccuracy),candidate=null;
+  if(Number.isFinite(heading)&&heading>=0&&v>=2.0&&(ba<0||ba<=35))candidate=heading;
+  if(candidate===null){if(!headingAnchor)headingAnchor=p;else{let d=map.distance(headingAnchor,p),threshold=Math.max(4,Math.min(10,(Number(acc)||0)*0.2));if(d>=threshold){candidate=bearingBetween(headingAnchor,p);headingAnchor=p}}}
+  if(candidate!==null){lastBearing=hasBearing?smoothBearing(lastBearing,candidate,.22):candidate;hasBearing=true}
+  lastPoint=p;if(!marker)marker=L.marker(p,{icon:arrowIcon(lastBearing),zIndexOffset:1000}).addTo(map);else marker.setLatLng(p).setIcon(arrowIcon(lastBearing));route.addLatLng(p);if(first){map.setView(p,16);first=false}else map.panTo(p,{animate:true,duration:.4})}
+function clearRoute(){route.setLatLngs([]);first=true;lastPoint=null;headingAnchor=null}
 </script></body></html>
 
