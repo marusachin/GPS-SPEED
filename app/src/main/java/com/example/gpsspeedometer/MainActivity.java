@@ -203,7 +203,7 @@ public class MainActivity extends Activity implements LocationListener {
         if(positionAccepted)prepareAltitude(loc);
         if(recording&&!paused&&positionAccepted&&accuracy<=35f){
             Location trackPoint=new Location(loc);
-            trackPoint.setSpeed(latestSpeedKmh/3.6f);
+            trackPoint.setSpeed((float)(latestSpeedKmh/3.6));
             if(previousTripPoint==null){
                 previousTripPoint=trackPoint;
                 if(points.size()<6000)points.add(new Location(trackPoint));
@@ -214,7 +214,7 @@ public class MainActivity extends Activity implements LocationListener {
                     distanceMeters+=trackDistance;
                     previousTripPoint=trackPoint;
                     if(points.size()<6000)points.add(new Location(trackPoint));
-                    maxKmh=Math.max(maxKmh,latestSpeedKmh);
+                    maxKmh=Math.max(maxKmh,(float)latestSpeedKmh);
                 }
             }
         }
