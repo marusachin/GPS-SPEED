@@ -5,8 +5,8 @@ GPS speed in km/h, GPS status and accuracy, live location and route, trip record
 ## Build and install
 
 1. In GitHub, open **Actions → Build GPS Speedometer APK** and wait for the latest run to show a green check.
-2. Open that run and download artifact **GPS-Speedometer-v2.3**.
-3. Extract the downloaded ZIP, tap `GPS-Speedometer-v2.3.apk`, allow installation when Android prompts, and tap **Install**.
+2. Open that run and download artifact **GPS-Speedometer-v2.2**.
+3. Extract the downloaded ZIP, tap `GPS-Speedometer-v2.2.apk`, allow installation when Android prompts, and tap **Install**.
 
 This is a personally installable debug APK, not a Play Store release.
 
@@ -27,8 +27,3 @@ GPS speed and route recording require location permission and Location/GPS enabl
 
 
 
-
-
-## Optional live traffic
-
-On the map, tap **Traffic**. To enable it, create a HERE developer account, register an app, and create an API key in the HERE platform. Paste the key into the app once; it is saved locally on this device and used only to request HERE traffic tiles. The overlay can be turned off by tapping **Traffic On**. Internet access is required, and HERE usage limits or charges may apply. See [HERE Traffic Raster Tile API](https://docs.here.com/traffic-api/reference/here-traffic-raster-tile-api-v3-gettile) and [HERE pricing](https://www.here.com/get-started/pricing).
