@@ -252,6 +252,7 @@ public class MainActivity extends Activity implements LocationListener {
         latestAltitudeMeters=meters;latestAltitudeKnown=true;latestAltitudeMsl=msl;
         altitudeView.setText(String.format(Locale.getDefault(),msl?"Altitude %.0f m MSL%s":"GPS altitude %.0f m WGS84%s",meters,accuracy));updateMapInfo();
     }
+    private void updateMapGpsInfo(){if(mapReady&&!Float.isNaN(latestAccuracyMeters)&&!Float.isInfinite(latestAccuracyMeters))map.evaluateJavascript("javascript:setGpsInfo("+latestAccuracyMeters+","+satellitesInFix+")",null);}
     private void updateMapInfo(){if(mapReady)map.evaluateJavascript("javascript:setMapInfo("+latestSpeedKmh+","+(recording?maxKmh:sessionMaxKmh)+","+latestAltitudeMeters+","+latestAltitudeKnown+","+latestAltitudeMsl+","+(Double.isFinite(latestDirectionDegrees)?latestDirectionDegrees:-1)+")",null);}
     @JavascriptInterface public void toggleFullscreen(){runOnUiThread(()->{fullScreenMap=!fullScreenMap;dashboard.setVisibility(fullScreenMap?View.GONE:View.VISIBLE);bottomControls.setVisibility(fullScreenMap?View.GONE:View.VISIBLE);if(mapReady)map.evaluateJavascript("javascript:setFullscreen("+fullScreenMap+")",null);});}
     @JavascriptInterface public void onDirectionChanged(double degrees){latestDirectionDegrees=degrees;}
