@@ -127,8 +127,9 @@ public class MainActivity extends Activity implements LocationListener {
     }
 
     private void buildUi() {
-        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(Color.rgb(10,18,32));
-        dashboard=new LinearLayout(this);((LinearLayout)dashboard).setOrientation(LinearLayout.VERTICAL);root.addView(dashboard,new LinearLayout.LayoutParams(-1,-2));
+        boolean landscape=getResources().getConfiguration().orientation==android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+        LinearLayout root = new LinearLayout(this); root.setOrientation(landscape?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL); root.setBackgroundColor(Color.rgb(10,18,32));
+        dashboard=new LinearLayout(this);((LinearLayout)dashboard).setOrientation(LinearLayout.VERTICAL);root.addView(dashboard,landscape?new LinearLayout.LayoutParams(dp(230),-1):new LinearLayout.LayoutParams(-1,-2));
         root.setOnApplyWindowInsetsListener((v,insets)->{int top=0,bottom=0;if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(android.view.WindowInsets.Type.systemBars());top=bars.top;bottom=bars.bottom;}else{top=insets.getSystemWindowInsetTop();bottom=insets.getSystemWindowInsetBottom();}v.setPadding(dp(12),top+dp(4),dp(12),bottom+dp(8));return insets;});
         LinearLayout header = new LinearLayout(this); header.setOrientation(LinearLayout.HORIZONTAL); header.setGravity(Gravity.CENTER_VERTICAL); header.setPadding(4,dp(6),4,dp(4));
         TextView title = new TextView(this); title.setText("GPS SPEEDOMETER"); title.setTextColor(Color.WHITE); title.setTextSize(15); title.setSingleLine(true); title.setGravity(Gravity.CENTER_VERTICAL); title.setTypeface(null,android.graphics.Typeface.BOLD); header.addView(title,new LinearLayout.LayoutParams(0,dp(38),1));
@@ -140,14 +141,17 @@ public class MainActivity extends Activity implements LocationListener {
         altitudeView = new TextView(this); altitudeView.setText("GPS altitude — m"); altitudeView.setTextColor(Color.WHITE); altitudeView.setTextSize(12); altitudeView.setGravity(Gravity.CENTER); altitudeView.setPadding(0,dp(2),0,dp(2)); dashboardAdd(altitudeView,new LinearLayout.LayoutParams(-1,dp(24)));
         detailView = new TextView(this); detailView.setText("Waiting for location • Accuracy —"); detailView.setTextColor(Color.LTGRAY); detailView.setTextSize(13); detailView.setGravity(Gravity.CENTER); detailView.setPadding(8,dp(2),8,dp(2)); dashboardAdd(detailView);
         map = new WebView(this); map.setBackgroundColor(Color.rgb(30,42,55)); map.getSettings().setJavaScriptEnabled(true); map.getSettings().setDomStorageEnabled(true); map.getSettings().setUserAgentString(map.getSettings().getUserAgentString()+" GPS-Speedometer/2.0"); map.setWebChromeClient(new WebChromeClient()); map.setWebViewClient(new WebViewClient(){@Override public void onPageFinished(WebView v,String u){mapReady=true;map.evaluateJavascript("javascript:setTravelMode("+JSONObject.quote(selectedTravelMode)+")",null);updateMapGpsInfo();}}); map.addJavascriptInterface(this,"Android"); map.loadUrl("file:///android_asset/map.html");
-        root.addView(map,new LinearLayout.LayoutParams(-1,0,1));
-        bottomControls = new LinearLayout(this); bottomControls.setOrientation(LinearLayout.VERTICAL);root.addView(bottomControls,new LinearLayout.LayoutParams(-1,-2));
+        root.addView(map,landscape?new LinearLayout.LayoutParams(0,-1,1):new LinearLayout.LayoutParams(-1,0,1));
+        bottomControls = new LinearLayout(this); bottomControls.setOrientation(LinearLayout.VERTICAL);
+        if(landscape)dashboard.addView(bottomControls,new LinearLayout.LayoutParams(-1,-2));else root.addView(bottomControls,new LinearLayout.LayoutParams(-1,-2));
         tripView = new TextView(this); tripView.setText("Trip: 0.00 km   •   Max: 0 km/h"); tripView.setTextColor(Color.WHITE); tripView.setTextSize(15); tripView.setGravity(Gravity.CENTER); tripView.setPadding(4,dp(8),4,dp(8)); bottomControls.addView(tripView,new LinearLayout.LayoutParams(-1,dp(42)));
-        LinearLayout buttons = new LinearLayout(this); buttons.setPadding(0,dp(2),0,dp(6)); buttons.setGravity(Gravity.CENTER); buttons.setOrientation(LinearLayout.HORIZONTAL);
-        recordButton = button("START"); recordButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(34,160,88))); recordButton.setOnClickListener(v -> toggleTrip()); buttons.addView(recordButton,new LinearLayout.LayoutParams(0,dp(48),1));
-        Button stop = button("STOP"); stop.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(220,53,69))); stop.setOnClickListener(v -> confirmStop()); LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0,dp(48),1); sp.leftMargin=dp(6); buttons.addView(stop,sp);
-        Button history = button("HISTORY"); history.setOnClickListener(v -> showHistory()); LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0,dp(48),1); hp.leftMargin=dp(6); buttons.addView(history,hp);
-        Button satellites = button("SATELLITES"); satellites.setTextSize(10); satellites.setOnClickListener(v -> startActivity(new Intent(this,SatelliteActivity.class))); LinearLayout.LayoutParams satp = new LinearLayout.LayoutParams(0,dp(48),1); satp.leftMargin=dp(6); buttons.addView(satellites,satp);
+        LinearLayout buttons = new LinearLayout(this); buttons.setPadding(0,dp(2),0,dp(6)); buttons.setGravity(Gravity.CENTER); buttons.setOrientation(landscape?LinearLayout.VERTICAL:LinearLayout.HORIZONTAL);
+        LinearLayout firstButtonRow=buttons,secondButtonRow=null;
+        if(landscape){firstButtonRow=new LinearLayout(this);firstButtonRow.setOrientation(LinearLayout.HORIZONTAL);secondButtonRow=new LinearLayout(this);secondButtonRow.setOrientation(LinearLayout.HORIZONTAL);buttons.addView(firstButtonRow,new LinearLayout.LayoutParams(-1,dp(44)));buttons.addView(secondButtonRow,new LinearLayout.LayoutParams(-1,dp(44)));}
+        recordButton = button("START"); recordButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(34,160,88))); recordButton.setOnClickListener(v -> toggleTrip()); firstButtonRow.addView(recordButton,new LinearLayout.LayoutParams(0,dp(landscape?42:48),1));
+        Button stop = button("STOP"); stop.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(220,53,69))); stop.setOnClickListener(v -> confirmStop()); LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0,dp(landscape?42:48),1); if(!landscape)sp.leftMargin=dp(6);firstButtonRow.addView(stop,sp);
+        Button history = button("HISTORY"); history.setOnClickListener(v -> showHistory()); LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0,dp(landscape?42:48),1); if(landscape)hp.leftMargin=dp(4);else hp.leftMargin=dp(6); (landscape?secondButtonRow:buttons).addView(history,hp);
+        Button satellites = button("SATELLITES"); satellites.setTextSize(landscape?9:10); satellites.setOnClickListener(v -> startActivity(new Intent(this,SatelliteActivity.class))); LinearLayout.LayoutParams satp = new LinearLayout.LayoutParams(0,dp(landscape?42:48),1); satp.leftMargin=dp(landscape?4:6); (landscape?secondButtonRow:buttons).addView(satellites,satp);
         bottomControls.addView(buttons);
         setContentView(root);
     }
