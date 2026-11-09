@@ -65,6 +65,8 @@ public class MainActivity extends Activity implements LocationListener {
     private long startedAt = 0;
     private double distanceMeters = 0;
     private long activeMillis = 0, activeSegmentStartedAt = 0;
+    private long idleMillis = 0, lastTripFixAt = 0;
+    private boolean lastTripFixWasIdle = false;
     private Location previousTripPoint = null;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService altitudeWorker = Executors.newSingleThreadExecutor();
@@ -160,6 +162,7 @@ public class MainActivity extends Activity implements LocationListener {
         if(Float.isNaN(accuracy)||Float.isInfinite(accuracy)||accuracy>35f){
             if(now-lastAcceptedMovementAt>2500)smoothedSpeedKmh=0;
             latestSpeedKmh=smoothedSpeedKmh;
+            updateIdleTime(loc,accuracy);
             speedView.setText(String.format(Locale.getDefault(),"%.0f",latestSpeedKmh));
             updateTrip();
             updateMapInfo();
@@ -204,6 +207,7 @@ public class MainActivity extends Activity implements LocationListener {
             smoothedSpeedKmh=0;
         }
         latestSpeedKmh=smoothedSpeedKmh;
+        updateIdleTime(loc,accuracy);
         if(positionAccepted)sessionMaxKmh=Math.max(sessionMaxKmh,latestSpeedKmh);
         speedView.setText(String.format(Locale.getDefault(),"%.0f",latestSpeedKmh));
 
@@ -276,10 +280,21 @@ public class MainActivity extends Activity implements LocationListener {
     }
     private void stopTripRecordingService(){stopService(new Intent(this,TripRecordingService.class));}
 
+    private void updateIdleTime(Location loc,float accuracy){
+        if(!recording||paused||accuracy>35f){lastTripFixAt=0;lastTripFixWasIdle=false;return;}
+        long sample=loc.getTime()>0?loc.getTime():System.currentTimeMillis();
+        if(lastTripFixAt>0&&lastTripFixWasIdle){long delta=sample-lastTripFixAt;if(delta>0)idleMillis+=Math.min(delta,5000);}
+        lastTripFixAt=sample;
+        lastTripFixWasIdle=latestSpeedKmh<1.0;
+    }
+    private void flushIdleTime(long now){
+        if(recording&&!paused&&lastTripFixAt>0&&lastTripFixWasIdle){long delta=now-lastTripFixAt;if(delta>0)idleMillis+=Math.min(delta,5000);}
+        lastTripFixAt=0;lastTripFixWasIdle=false;
+    }
     private void toggleTrip(){
-        if(!recording){recording=true;paused=false;startedAt=System.currentTimeMillis();activeSegmentStartedAt=startedAt;activeMillis=0;distanceMeters=0;maxKmh=0;points.clear();previousTripPoint=null;recordButton.setText("PAUSE TRIP");if(mapReady)map.evaluateJavascript("javascript:clearRoute();resumeGpsFollow()",null);}
-        else if(!paused){activeMillis+=System.currentTimeMillis()-activeSegmentStartedAt;paused=true;previousTripPoint=null;recordButton.setText("RESUME TRIP");}
-        else {paused=false;activeSegmentStartedAt=System.currentTimeMillis();previousTripPoint=null;recordButton.setText("PAUSE TRIP");if(mapReady)map.evaluateJavascript("javascript:resumeGpsFollow()",null);}
+        if(!recording){recording=true;paused=false;startedAt=System.currentTimeMillis();activeSegmentStartedAt=startedAt;activeMillis=0;idleMillis=0;lastTripFixAt=0;lastTripFixWasIdle=false;distanceMeters=0;maxKmh=0;points.clear();previousTripPoint=null;recordButton.setText("PAUSE TRIP");if(mapReady)map.evaluateJavascript("javascript:clearRoute();resumeGpsFollow()",null);}
+        else if(!paused){activeMillis+=System.currentTimeMillis()-activeSegmentStartedAt;flushIdleTime(System.currentTimeMillis());paused=true;previousTripPoint=null;recordButton.setText("RESUME TRIP");}
+        else {paused=false;activeSegmentStartedAt=System.currentTimeMillis();lastTripFixAt=0;lastTripFixWasIdle=false;previousTripPoint=null;recordButton.setText("PAUSE TRIP");if(mapReady)map.evaluateJavascript("javascript:resumeGpsFollow()",null);}
         if(!recording)recordButton.setText("START TRIP");
         if(recording&&!paused)startTripRecordingService();else stopTripRecordingService();
         updateTrip();
@@ -303,9 +318,9 @@ public class MainActivity extends Activity implements LocationListener {
     @Override public void onBackPressed(){ if(recording){new AlertDialog.Builder(this).setTitle("Stop trip?").setMessage("Save this trip before closing?").setNegativeButton("Keep recording",(d,w)->{}).setPositiveButton("Stop and save",(d,w)->saveTrip()).show();}else super.onBackPressed(); }
     private void saveTrip(){
         try{
-            long ended=System.currentTimeMillis(); long duration=activeMillis+(paused?0:ended-activeSegmentStartedAt);
+            long ended=System.currentTimeMillis();if(!paused)flushIdleTime(ended);long duration=activeMillis+(paused?0:ended-activeSegmentStartedAt);
             JSONArray route=new JSONArray(); for(Location point:points){JSONObject p=new JSONObject();p.put("lat",point.getLatitude());p.put("lon",point.getLongitude());double alt=Build.VERSION.SDK_INT>=34&&point.hasMslAltitude()?point.getMslAltitudeMeters():point.hasAltitude()?point.getAltitude():Double.NaN;p.put("alt",Double.isFinite(alt)?alt:JSONObject.NULL);p.put("speedKmh",point.hasSpeed()?point.getSpeed()*3.6:JSONObject.NULL);p.put("bearingDeg",point.hasBearing()?point.getBearing():JSONObject.NULL);p.put("time",point.getTime());route.put(p);}
-            JSONObject trip=new JSONObject();trip.put("date",new SimpleDateFormat("MMM d, yyyy HH:mm",Locale.getDefault()).format(new Date(startedAt)));trip.put("startTime",startedAt);trip.put("endTime",ended);trip.put("durationMillis",duration);trip.put("distanceMeters",distanceMeters);trip.put("averageKmh",duration>0?(distanceMeters/(duration/1000.0))*3.6:0);trip.put("maxKmh",maxKmh);trip.put("altitudeReference",Build.VERSION.SDK_INT>=34&&altitudeMslReady?"MSL":"WGS84");trip.put("points",route);
+            JSONObject trip=new JSONObject();trip.put("date",new SimpleDateFormat("MMM d, yyyy HH:mm",Locale.getDefault()).format(new Date(startedAt)));trip.put("startTime",startedAt);trip.put("endTime",ended);trip.put("durationMillis",duration);trip.put("distanceMeters",distanceMeters);trip.put("averageKmh",duration>0?(distanceMeters/(duration/1000.0))*3.6:0);trip.put("maxKmh",maxKmh);trip.put("idleMillis",idleMillis);trip.put("altitudeReference",Build.VERSION.SDK_INT>=34&&altitudeMslReady?"MSL":"WGS84");trip.put("points",route);
             JSONArray old=new JSONArray(getSharedPreferences("gps_trips",0).getString("history","[]"));JSONArray saved=new JSONArray();for(int i=Math.max(0,old.length()-29);i<old.length();i++)saved.put(old.get(i));saved.put(trip);getSharedPreferences("gps_trips",0).edit().putString("history",saved.toString()).apply();
         }catch(Exception ignored){}
         stopTripRecordingService();recording=false;paused=false;activeMillis=0;previousTripPoint=null;recordButton.setText("START");updateTrip();
