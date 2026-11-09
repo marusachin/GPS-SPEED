@@ -284,7 +284,16 @@ public class MainActivity extends Activity implements LocationListener {
         if(recording&&!paused)startTripRecordingService();else stopTripRecordingService();
         updateTrip();
     }
-    private void updateTrip(){tripView.setText(String.format(Locale.getDefault(),"Trip: %.2f km   •   Max: %.0f km/h%s",distanceMeters/1000,maxKmh,paused?"   •   PAUSED":""));}
+    private void updateTrip(){
+        tripView.setText(String.format(Locale.getDefault(),"Trip: %.2f km   •   Max: %.0f km/h%s",distanceMeters/1000,maxKmh,paused?"   •   PAUSED":""));
+        if(recording&&!paused){
+            Intent update=new Intent(this,TripRecordingService.class);
+            update.setAction(TripRecordingService.ACTION_UPDATE);
+            update.putExtra("distance_km",distanceMeters/1000.0);
+            update.putExtra("speed_kmh",latestSpeedKmh);
+            startService(update);
+        }
+    }
     private void confirmStop(){if(!recording)return;new AlertDialog.Builder(this).setTitle("Stop and save trip?").setMessage("Save this trip in your history?").setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->saveTrip()).show();}
     private void showHistory(){startActivity(new Intent(this,TripHistoryActivity.class));}
     private void migrateOldHistory(){try{if(getSharedPreferences("gps_trips",0).contains("history"))return;String legacy=getPreferences(0).getString("history",null);if(legacy!=null)getSharedPreferences("gps_trips",0).edit().putString("history",legacy).apply();}catch(Exception ignored){}}
