@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.net.Uri;
+import android.location.Geocoder;
+import android.location.Address;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -19,6 +21,9 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.Locale;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.Date;
 import java.util.TimeZone;
 import java.text.SimpleDateFormat;
@@ -35,6 +40,7 @@ public class TripHistoryActivity extends Activity {
     private LinearLayout page;
     private WebView detailMap;
     private static final int NAVY = Color.rgb(10,18,32);
+    private final ExecutorService geocoderWorker=Executors.newSingleThreadExecutor();
 
     @Override public void onCreate(Bundle saved){super.onCreate(saved);loadTrips();showList();}
 
@@ -55,10 +61,19 @@ public class TripHistoryActivity extends Activity {
         LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(8),dp(2),dp(8),dp(2));
         Button back=new Button(this);back.setText("‹  HISTORY");back.setTextSize(13);back.setOnClickListener(v->showList());bar.addView(back,new LinearLayout.LayoutParams(dp(118),dp(48)));
         TextView title=new TextView(this);title.setText(trip.optString("date","Trip details"));title.setTextColor(Color.WHITE);title.setTextSize(13);title.setGravity(Gravity.CENTER);bar.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));Button export=smallButton("EXPORT");export.setOnClickListener(v->beginExport());bar.addView(export,new LinearLayout.LayoutParams(dp(72),dp(44)));Button delete=smallButton("DELETE");delete.setTextColor(Color.rgb(255,190,190));delete.setOnClickListener(v->confirmDelete());bar.addView(delete,new LinearLayout.LayoutParams(dp(72),dp(44)));page.addView(bar);
-        detailMap=new WebView(this);detailMap.getSettings().setJavaScriptEnabled(true);detailMap.getSettings().setUserAgentString(detailMap.getSettings().getUserAgentString()+" GPS-Speedometer/2.0");detailMap.setWebChromeClient(new WebChromeClient());detailMap.setWebViewClient(new WebViewClient(){@Override public void onPageFinished(WebView view,String url){view.evaluateJavascript("renderTrip("+trip.toString()+")",null);}});page.addView(detailMap,new LinearLayout.LayoutParams(-1,0,1));detailMap.loadUrl("file:///android_asset/trip_detail.html");
+        detailMap=new WebView(this);detailMap.getSettings().setJavaScriptEnabled(true);detailMap.getSettings().setUserAgentString(detailMap.getSettings().getUserAgentString()+" GPS-Speedometer/2.0");detailMap.setWebChromeClient(new WebChromeClient());detailMap.setWebViewClient(new WebViewClient(){@Override public void onPageFinished(WebView view,String url){view.evaluateJavascript("renderTrip("+trip.toString()+")",null);JSONArray route=trip.optJSONArray("points");if(route!=null&&route.length()>0){lookupEndpointName(trip,0,"start");lookupEndpointName(trip,route.length()-1,"stop");}}});page.addView(detailMap,new LinearLayout.LayoutParams(-1,0,1));detailMap.loadUrl("file:///android_asset/trip_detail.html");
         setContentView(page);
     }
 
+    private void lookupEndpointName(JSONObject trip,int pointIndex,String elementId){
+        JSONArray points=trip.optJSONArray("points");JSONObject point=points==null?null:points.optJSONObject(pointIndex);if(point==null)return;
+        double lat=point.optDouble("lat",Double.NaN),lon=point.optDouble("lon",Double.NaN);if(!Double.isFinite(lat)||!Double.isFinite(lon))return;
+        geocoderWorker.execute(()->{
+            String name=null;
+            try{if(Geocoder.isPresent()){List<Address> results=new Geocoder(getApplicationContext(),Locale.getDefault()).getFromLocation(lat,lon,1);if(results!=null&&!results.isEmpty()){Address address=results.get(0);name=address.getFeatureName();if(name==null||name.trim().isEmpty())name=address.getSubLocality();if(name==null||name.trim().isEmpty())name=address.getLocality();if(name==null||name.trim().isEmpty())name=address.getAddressLine(0);}}}catch(Exception ignored){}
+            if(name!=null&&!name.trim().isEmpty()){final String safeName=name.trim();runOnUiThread(()->{if(selectedTrip==trip&&detailMap!=null)detailMap.evaluateJavascript("setPointName("+JSONObject.quote(elementId)+","+JSONObject.quote(safeName)+")",null);});}
+        });
+    }
     private Button smallButton(String label){Button b=new Button(this);b.setText(label);b.setTextSize(10);b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(0,0,0,0);return b;}
     private void confirmDelete(){if(selectedTripIndex<0||selectedTripIndex>=trips.length())return;new AlertDialog.Builder(this).setTitle("Delete this trip?").setMessage("This removes the trip and its saved route from history.").setNegativeButton("Cancel",null).setPositiveButton("Delete",(d,w)->deleteSelectedTrip()).show();}
     private void deleteSelectedTrip(){JSONArray remaining=new JSONArray();for(int i=0;i<trips.length();i++)if(i!=selectedTripIndex){Object item=trips.opt(i);if(item!=null)remaining.put(item);}trips=remaining;getSharedPreferences("gps_trips",0).edit().putString("history",trips.toString()).apply();Toast.makeText(this,"Trip deleted",Toast.LENGTH_SHORT).show();showList();}
@@ -69,5 +84,6 @@ public class TripHistoryActivity extends Activity {
     private String formatDuration(long millis){long sec=Math.max(0,millis/1000),h=sec/3600,m=(sec%3600)/60,s=sec%60;return h>0?String.format(Locale.getDefault(),"%02d:%02d:%02d",h,m,s):String.format(Locale.getDefault(),"%02d:%02d",m,s);}
     private int dp(int value){return (int)(value*getResources().getDisplayMetrics().density+0.5f);}
     @Override public void onBackPressed(){if(selectedTrip!=null)showList();else super.onBackPressed();}
+    @Override protected void onDestroy(){geocoderWorker.shutdownNow();super.onDestroy();}
 }
 
