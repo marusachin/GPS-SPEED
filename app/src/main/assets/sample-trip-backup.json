@@ -1,0 +1,111 @@
+[
+  {
+    "date": "TEST • Manpada to Borivali Station",
+    "startTime": 1794191400000,
+    "endTime": 1794193560000,
+    "durationMillis": 2160000,
+    "distanceMeters": 18461,
+    "averageKmh": 31,
+    "maxKmh": 70,
+    "idleMillis": 60000,
+    "altitudeReference": "WGS84",
+    "points": [
+      {
+        "lat": 19.23707,
+        "lon": 72.97413,
+        "alt": 52,
+        "speedKmh": 0,
+        "bearingDeg": 0,
+        "time": 1794191400000
+      },
+      {
+        "lat": 19.245,
+        "lon": 72.966,
+        "alt": 53,
+        "speedKmh": 35,
+        "bearingDeg": 265,
+        "time": 1794191580000
+      },
+      {
+        "lat": 19.251,
+        "lon": 72.9555,
+        "alt": 54,
+        "speedKmh": 42,
+        "bearingDeg": 265,
+        "time": 1794191760000
+      },
+      {
+        "lat": 19.257,
+        "lon": 72.944,
+        "alt": 57,
+        "speedKmh": 50,
+        "bearingDeg": 265,
+        "time": 1794191940000
+      },
+      {
+        "lat": 19.26,
+        "lon": 72.927,
+        "alt": 48,
+        "speedKmh": 38,
+        "bearingDeg": 265,
+        "time": 1794192120000
+      },
+      {
+        "lat": 19.263,
+        "lon": 72.909,
+        "alt": 44,
+        "speedKmh": 54,
+        "bearingDeg": 265,
+        "time": 1794192300000
+      },
+      {
+        "lat": 19.27,
+        "lon": 72.882,
+        "alt": 38,
+        "speedKmh": 62,
+        "bearingDeg": 265,
+        "time": 1794192480000
+      },
+      {
+        "lat": 19.28,
+        "lon": 72.864,
+        "alt": 32,
+        "speedKmh": 48,
+        "bearingDeg": 265,
+        "time": 1794192660000
+      },
+      {
+        "lat": 19.267,
+        "lon": 72.86,
+        "alt": 29,
+        "speedKmh": 70,
+        "bearingDeg": 265,
+        "time": 1794192840000
+      },
+      {
+        "lat": 19.249,
+        "lon": 72.858,
+        "alt": 27,
+        "speedKmh": 55,
+        "bearingDeg": 265,
+        "time": 1794193020000
+      },
+      {
+        "lat": 19.237,
+        "lon": 72.858,
+        "alt": 24,
+        "speedKmh": 35,
+        "bearingDeg": 265,
+        "time": 1794193200000
+      },
+      {
+        "lat": 19.229427,
+        "lon": 72.856994,
+        "alt": 22,
+        "speedKmh": 0,
+        "bearingDeg": 190,
+        "time": 1794193380000
+      }
+    ]
+  }
+]
