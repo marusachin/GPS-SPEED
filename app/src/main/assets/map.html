@@ -15,7 +15,7 @@ map.on('dragstart',()=>{followGps=false;document.getElementById('followGps').sty
 function distanceMeters(a,b){let rad=x=>x*Math.PI/180,R=6371000,dLat=rad(b[0]-a[0]),dLon=rad(b[1]-a[1]),v=Math.sin(dLat/2)**2+Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(v))}
 function bearingBetween(a,b){let r=Math.PI/180,y=Math.sin((b[1]-a[1])*r)*Math.cos(a[0]*r),x=Math.cos(a[0]*r)*Math.sin(b[0]*r)-Math.sin(a[0]*r)*Math.cos(b[0]*r)*Math.cos((b[1]-a[1])*r);return (Math.atan2(y,x)/r+360)%360}
 function smoothBearing(from,to,amount){let delta=((to-from+540)%360)-180;return (from+delta*amount+360)%360}
-function makeArrow(deg){let el=document.createElement('div');el.className='gps-arrow';el.innerHTML='<svg viewBox="0 0 36 36"><path d="M18 2 L33 33 L18 25 L3 33 Z" fill="#0878e8" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>';el.firstChild.style.transform='rotate('+deg+'deg)';return el}
+function makeArrow(deg){let el=document.createElement('div');el.className='gps-arrow';el.innerHTML='<svg viewBox="0 0 36 36"><path d="M18 2 L33 33 L18 25 L3 33 Z" fill="#0878e8" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>';el.firstChild.style.transform='rotate('+((deg-map.getBearing()+360)%360)+'deg)';return el}
 function updateArrow(deg){if(!arrowEl)return;let relative=((deg-map.getBearing()+360)%360);arrowEl.firstChild.style.transform='rotate('+relative+'deg)'}
 function applyHeadingToMap(deg){if(!followGps)return;let delta=Math.abs(((deg-map.getBearing()+540)%360)-180),now=Date.now();if(delta>3&&now-lastMapRotateAt>220){lastMapRotateAt=now;map.easeTo({bearing:deg,duration:280})}}
 map.on('rotate',()=>updateArrow(lastBearing));
