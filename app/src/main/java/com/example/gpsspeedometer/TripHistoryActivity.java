@@ -77,7 +77,7 @@ public class TripHistoryActivity extends Activity {
         ScrollView scroll=new ScrollView(this);scroll.setBackgroundColor(NAVY);
         LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(18),dp(18),dp(18),dp(18));scroll.addView(content);addTabs(content,true);
         TextView heading=new TextView(this);heading.setText("IMPORT / EXPORT");heading.setTextColor(Color.WHITE);heading.setTextSize(22);heading.setTypeface(null,android.graphics.Typeface.BOLD);heading.setPadding(0,dp(6),0,dp(12));content.addView(heading);
-        TextView note=new TextView(this);note.setText("Choose a folder once. Backups of all trips and exported GPX routes will be saved there.");note.setTextColor(Color.LTGRAY);note.setTextSize(14);note.setPadding(0,0,0,dp(12));content.addView(note);
+        TextView note=new TextView(this);note.setText("Choose a folder once. New trips are copied there automatically; you can also back up all trips and save GPX routes there.");note.setTextColor(Color.LTGRAY);note.setTextSize(14);note.setPadding(0,0,0,dp(12));content.addView(note);
         TextView folder=new TextView(this);folder.setText("Saved folder: "+backupFolderLabel());folder.setTextColor(Color.WHITE);folder.setTextSize(15);folder.setPadding(0,0,0,dp(8));content.addView(folder);
         Button choose=actionButton("CHOOSE SAVE FOLDER");choose.setOnClickListener(v->chooseBackupFolder(null));content.addView(choose,fullWidth());
         Button backup=actionButton("BACK UP ALL TRIPS");backup.setOnClickListener(v->beginHistoryBackup());LinearLayout.LayoutParams bp=fullWidth();bp.topMargin=dp(8);content.addView(backup,bp);
