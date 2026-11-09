@@ -267,11 +267,22 @@ public class MainActivity extends Activity implements LocationListener {
         });
     }
     private void convertRecordedPointsToMsl(){for(int i=0;i<points.size();i++){Location point=points.get(i);if(!point.hasMslAltitude()){Location converted=new Location(point);if(Api34Altitude.tryConvert(converted))points.set(i,converted);}}}
+    private void startTripRecordingService(){
+        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)return;
+        if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},41);
+        Intent service=new Intent(this,TripRecordingService.class);
+        if(Build.VERSION.SDK_INT>=26)startForegroundService(service);else startService(service);
+    }
+    private void stopTripRecordingService(){stopService(new Intent(this,TripRecordingService.class));}
+
     private void toggleTrip(){
         if(!recording){recording=true;paused=false;startedAt=System.currentTimeMillis();activeSegmentStartedAt=startedAt;activeMillis=0;distanceMeters=0;maxKmh=0;points.clear();previousTripPoint=null;recordButton.setText("PAUSE TRIP");if(mapReady)map.evaluateJavascript("javascript:clearRoute();resumeGpsFollow()",null);}
         else if(!paused){activeMillis+=System.currentTimeMillis()-activeSegmentStartedAt;paused=true;previousTripPoint=null;recordButton.setText("RESUME TRIP");}
         else {paused=false;activeSegmentStartedAt=System.currentTimeMillis();previousTripPoint=null;recordButton.setText("PAUSE TRIP");if(mapReady)map.evaluateJavascript("javascript:resumeGpsFollow()",null);}
-        if(!recording)recordButton.setText("START TRIP"); updateTrip();
+        if(!recording)recordButton.setText("START TRIP");
+        if(recording&&!paused)startTripRecordingService();else stopTripRecordingService();
+        updateTrip();
     }
     private void updateTrip(){tripView.setText(String.format(Locale.getDefault(),"Trip: %.2f km   •   Max: %.0f km/h%s",distanceMeters/1000,maxKmh,paused?"   •   PAUSED":""));}
     private void confirmStop(){if(!recording)return;new AlertDialog.Builder(this).setTitle("Stop and save trip?").setMessage("Save this trip in your history?").setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->saveTrip()).show();}
@@ -288,7 +299,7 @@ public class MainActivity extends Activity implements LocationListener {
             JSONObject trip=new JSONObject();trip.put("date",new SimpleDateFormat("MMM d, yyyy HH:mm",Locale.getDefault()).format(new Date(startedAt)));trip.put("startTime",startedAt);trip.put("endTime",ended);trip.put("durationMillis",duration);trip.put("distanceMeters",distanceMeters);trip.put("averageKmh",duration>0?(distanceMeters/(duration/1000.0))*3.6:0);trip.put("maxKmh",maxKmh);trip.put("altitudeReference",Build.VERSION.SDK_INT>=34&&altitudeMslReady?"MSL":"WGS84");trip.put("points",route);
             JSONArray old=new JSONArray(getSharedPreferences("gps_trips",0).getString("history","[]"));JSONArray saved=new JSONArray();for(int i=Math.max(0,old.length()-29);i<old.length();i++)saved.put(old.get(i));saved.put(trip);getSharedPreferences("gps_trips",0).edit().putString("history",saved.toString()).apply();
         }catch(Exception ignored){}
-        recording=false;paused=false;activeMillis=0;previousTripPoint=null;recordButton.setText("START");updateTrip();
+        stopTripRecordingService();recording=false;paused=false;activeMillis=0;previousTripPoint=null;recordButton.setText("START");updateTrip();
     }
     @JavascriptInterface public void stopTrip(){runOnUiThread(()->{if(recording){new AlertDialog.Builder(this).setTitle("Stop and save trip?").setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->saveTrip()).show();}});}
     @Override protected void onResume(){super.onResume();if(sensorManager!=null&&rotationVectorSensor!=null)sensorManager.registerListener(compassListener,rotationVectorSensor,SensorManager.SENSOR_DELAY_UI);}
