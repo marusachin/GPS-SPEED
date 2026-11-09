@@ -6,6 +6,8 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.provider.DocumentsContract;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -40,10 +42,13 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainActivity extends Activity implements LocationListener {
     private static final int REQUEST_LOCATION = 10;
+    private static final int REQUEST_TRIP_FOLDER = 52;
+    private JSONObject tripPendingFolderExport;
     private LocationManager locationManager;
     private SensorManager sensorManager;
     private Sensor rotationVectorSensor;
@@ -317,14 +322,20 @@ public class MainActivity extends Activity implements LocationListener {
     @Override public void onStatusChanged(String p,int s,Bundle b){}
     @Override public void onBackPressed(){ if(recording){new AlertDialog.Builder(this).setTitle("Stop trip?").setMessage("Save this trip before closing?").setNegativeButton("Keep recording",(d,w)->{}).setPositiveButton("Stop and save",(d,w)->saveTrip()).show();}else super.onBackPressed(); }
     private void saveTrip(){
+        JSONObject tripForFolder=null;
         try{
             long ended=System.currentTimeMillis();if(!paused)flushIdleTime(ended);long duration=activeMillis+(paused?0:ended-activeSegmentStartedAt);
             JSONArray route=new JSONArray(); for(Location point:points){JSONObject p=new JSONObject();p.put("lat",point.getLatitude());p.put("lon",point.getLongitude());double alt=Build.VERSION.SDK_INT>=34&&point.hasMslAltitude()?point.getMslAltitudeMeters():point.hasAltitude()?point.getAltitude():Double.NaN;p.put("alt",Double.isFinite(alt)?alt:JSONObject.NULL);p.put("speedKmh",point.hasSpeed()?point.getSpeed()*3.6:JSONObject.NULL);p.put("bearingDeg",point.hasBearing()?point.getBearing():JSONObject.NULL);p.put("time",point.getTime());route.put(p);}
             JSONObject trip=new JSONObject();trip.put("date",new SimpleDateFormat("MMM d, yyyy HH:mm",Locale.getDefault()).format(new Date(startedAt)));trip.put("startTime",startedAt);trip.put("endTime",ended);trip.put("durationMillis",duration);trip.put("distanceMeters",distanceMeters);trip.put("averageKmh",duration>0?(distanceMeters/(duration/1000.0))*3.6:0);trip.put("maxKmh",maxKmh);trip.put("idleMillis",idleMillis);trip.put("altitudeReference",Build.VERSION.SDK_INT>=34&&altitudeMslReady?"MSL":"WGS84");trip.put("points",route);
-            JSONArray old=new JSONArray(getSharedPreferences("gps_trips",0).getString("history","[]"));JSONArray saved=new JSONArray();for(int i=0;i<old.length();i++)saved.put(old.get(i));saved.put(trip);getSharedPreferences("gps_trips",0).edit().putString("history",saved.toString()).apply();
+            tripForFolder=trip;JSONArray old=new JSONArray(getSharedPreferences("gps_trips",0).getString("history","[]"));JSONArray saved=new JSONArray();for(int i=0;i<old.length();i++)saved.put(old.get(i));saved.put(trip);getSharedPreferences("gps_trips",0).edit().putString("history",saved.toString()).apply();
         }catch(Exception ignored){}
         stopTripRecordingService();recording=false;paused=false;activeMillis=0;previousTripPoint=null;recordButton.setText("START");updateTrip();
+        saveTripCopyToFolder(tripForFolder);
     }
+    private android.net.Uri savedTripFolder(){String value=getSharedPreferences("gps_backup",0).getString("folder",null);try{return value==null?null:Uri.parse(value);}catch(Exception e){return null;}}
+    private void saveTripCopyToFolder(JSONObject trip){if(trip==null)return;Uri tree=savedTripFolder();if(tree==null){tripPendingFolderExport=trip;new AlertDialog.Builder(this).setTitle("Choose a trip folder?").setMessage("This trip is saved in Trip History. Choose a folder to also save a backup file there automatically after each trip.").setNegativeButton("Later",(d,w)->tripPendingFolderExport=null).setPositiveButton("Choose folder",(d,w)->{Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);try{startActivityForResult(intent,REQUEST_TRIP_FOLDER);}catch(Exception e){tripPendingFolderExport=null;}}).show();return;}writeTripCopyToFolder(trip,tree);}
+    private void writeTripCopyToFolder(JSONObject trip,Uri tree){try{String parentId=DocumentsContract.getTreeDocumentId(tree);Uri parent=DocumentsContract.buildDocumentUriUsingTree(tree,parentId);String stamp=new SimpleDateFormat("yyyyMMdd-HHmmss",Locale.US).format(new Date(trip.optLong("startTime",System.currentTimeMillis())));Uri file=DocumentsContract.createDocument(getContentResolver(),parent,"application/json","GPS-Trip-"+stamp+".json");if(file==null)throw new java.io.IOException("Unable to create trip file");try(OutputStream out=getContentResolver().openOutputStream(file)){if(out==null)throw new java.io.IOException("Unable to open trip file");JSONArray oneTrip=new JSONArray();oneTrip.put(trip);out.write(oneTrip.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));out.flush();}Toast.makeText(this,"Trip copy saved in your chosen folder",Toast.LENGTH_LONG).show();}catch(Exception e){Toast.makeText(this,"Trip is saved in History, but its folder copy failed. Choose the folder again in Import / Export.",Toast.LENGTH_LONG).show();}}
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode!=REQUEST_TRIP_FOLDER||resultCode!=RESULT_OK||data==null||data.getData()==null)return;Uri tree=data.getData();try{getContentResolver().takePersistableUriPermission(tree,data.getFlags()&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION));getSharedPreferences("gps_backup",0).edit().putString("folder",tree.toString()).apply();JSONObject trip=tripPendingFolderExport;tripPendingFolderExport=null;if(trip!=null)writeTripCopyToFolder(trip,tree);Toast.makeText(this,"Save folder selected. New trips will be copied here.",Toast.LENGTH_LONG).show();}catch(Exception e){tripPendingFolderExport=null;Toast.makeText(this,"Could not remember that folder. Please choose another.",Toast.LENGTH_LONG).show();}}
     @JavascriptInterface public void stopTrip(){runOnUiThread(()->{if(recording){new AlertDialog.Builder(this).setTitle("Stop and save trip?").setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->saveTrip()).show();}});}
     @Override protected void onResume(){super.onResume();if(sensorManager!=null&&rotationVectorSensor!=null)sensorManager.registerListener(compassListener,rotationVectorSensor,SensorManager.SENSOR_DELAY_UI);}
     @Override protected void onPause(){if(sensorManager!=null)sensorManager.unregisterListener(compassListener);super.onPause();}
