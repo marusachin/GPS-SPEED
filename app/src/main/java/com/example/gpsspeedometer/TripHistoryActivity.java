@@ -27,6 +27,7 @@ import java.util.Locale;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.net.HttpURLConnection;
 import java.util.Date;
 import java.util.TimeZone;
 import java.text.SimpleDateFormat;
