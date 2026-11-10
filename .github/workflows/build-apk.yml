@@ -22,10 +22,10 @@ jobs:
       - name: Build installable debug APK
         run: gradle --no-daemon assembleDebug
       - name: Give APK a clear name
-        run: cp app/build/outputs/apk/debug/app-debug.apk GPS-Speedometer-v2.18.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk GPS-Speedometer-v2.19.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: GPS-Speedometer-v2.18
-          path: GPS-Speedometer-v2.18.apk
+          name: GPS-Speedometer-v2.19
+          path: GPS-Speedometer-v2.19.apk
           if-no-files-found: error
 
