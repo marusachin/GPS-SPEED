@@ -97,7 +97,7 @@ public class MainActivity extends Activity implements LocationListener {
     private boolean latestAltitudeKnown=false, latestAltitudeMsl=false;
     private double latestDirectionDegrees=Double.NaN;
     private final ExecutorService elevationLookupExecutor=Executors.newSingleThreadExecutor();
-    private final ExecutorService offlineTileExecutor=Executors.newFixedThreadPool(4);
+    private final ExecutorService offlineTileExecutor=Executors.newFixedThreadPool(2);
     private final ExecutorService offlineCoordinator=Executors.newSingleThreadExecutor();
     private static final long OFFLINE_MAX_BYTES=50L*1024L*1024L;
     private static final int OFFLINE_OPENFREEMAP_TILE_LIMIT=3000;
